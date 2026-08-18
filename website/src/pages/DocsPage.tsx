@@ -127,7 +127,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ navigate, onOpenDownload }) 
                 60-Second Quickstart Guide
               </h1>
               <p className="text-base text-slate-600 leading-relaxed">
-                Connect your AI coding agents, IDEs, and CLI tools to TetherIQ in three effortless steps.
+                Connect your AI coding agents, IDEs, and CLI tools to TetherMesh in three effortless steps.
               </p>
             </div>
 
@@ -137,10 +137,10 @@ export const DocsPage: React.FC<DocsPageProps> = ({ navigate, onOpenDownload }) 
                 <div className="w-8 h-8 rounded-lg bg-cyan-600 text-white font-bold flex items-center justify-center text-sm shadow-xs">
                   1
                 </div>
-                <h3 className="text-lg font-bold text-slate-900">Launch TetherIQ Desktop</h3>
+                <h3 className="text-lg font-bold text-slate-900">Launch TetherMesh Desktop</h3>
               </div>
               <p className="text-sm text-slate-600 leading-relaxed">
-                Open TetherIQ on macOS, Windows, or Linux. The local loopback proxy gateway spins up automatically on port 4000.
+                Open TetherMesh on macOS, Windows, or Linux. The local loopback proxy gateway spins up automatically on port 4000.
               </p>
               <div className="p-3 rounded-xl bg-slate-900 text-white font-mono text-xs flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -219,7 +219,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ navigate, onOpenDownload }) 
                       ? 'export ANTHROPIC_BASE_URL=http://127.0.0.1:4000\nclaude'
                       : activeTab === 'cursor'
                       ? 'Base URL: http://127.0.0.1:4000/v1\nModel: fast-code'
-                      : 'from openai import OpenAI\nclient = OpenAI(base_url="http://127.0.0.1:4000/v1", api_key="tetheriq-local")';
+                      : 'from openai import OpenAI\nclient = OpenAI(base_url="http://127.0.0.1:4000/v1", api_key="tethermesh-local")';
                     handleCopy(text, activeTab);
                   }}
                   className="absolute right-3 top-3 p-1.5 rounded-md bg-slate-800 text-slate-400 hover:text-white transition-all flex items-center gap-1 text-[11px]"

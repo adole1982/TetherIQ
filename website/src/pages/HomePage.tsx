@@ -36,7 +36,7 @@ export const HomePage: React.FC<HomePageProps> = ({ navigate, onOpenDownload }) 
   const [copiedCmd, setCopiedCmd] = useState(false);
   const [activeCodeTab, setActiveCodeTab] = useState<'claude' | 'cursor' | 'python'>('claude');
 
-  const curlCmd = 'curl -fsSL https://tetheriq.dev/install.sh | bash';
+  const curlCmd = 'curl -fsSL https://tethermesh.dev/install.sh | bash';
 
   const handleCopyCmd = () => {
     navigator.clipboard.writeText(curlCmd);
@@ -127,7 +127,7 @@ export const HomePage: React.FC<HomePageProps> = ({ navigate, onOpenDownload }) 
                   <span className="w-3 h-3 rounded-full bg-emerald-500/80" />
                   <span className="text-slate-300 ml-2 font-bold flex items-center gap-1.5">
                     <Zap className="w-3.5 h-3.5 text-cyan-400 fill-cyan-400" />
-                    TetherIQ Control Plane
+                    TetherMesh Control Plane
                   </span>
                 </div>
                 <div className="flex items-center space-x-3">
@@ -226,7 +226,7 @@ export const HomePage: React.FC<HomePageProps> = ({ navigate, onOpenDownload }) 
         </div>
       </section>
 
-      {/* 3. The Frustrating Reality vs. The TetherIQ Fix (Comparison Grid) */}
+      {/* 3. The Frustrating Reality vs. The TetherMesh Fix (Comparison Grid) */}
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto mb-14">
@@ -292,11 +292,11 @@ export const HomePage: React.FC<HomePageProps> = ({ navigate, onOpenDownload }) 
               </div>
             </div>
 
-            {/* The TetherIQ Fix */}
+            {/* The TetherMesh Fix */}
             <div className="rounded-2xl border border-cyan-200 bg-cyan-50/30 p-6 sm:p-8 space-y-6">
               <div className="flex items-center space-x-2 text-cyan-800 font-bold text-sm uppercase tracking-wider">
                 <CheckCircle2 className="w-5 h-5 text-cyan-600" />
-                <span>The TetherIQ Fix</span>
+                <span>The TetherMesh Fix</span>
               </div>
 
               <div className="space-y-4 text-sm">
@@ -306,7 +306,7 @@ export const HomePage: React.FC<HomePageProps> = ({ navigate, onOpenDownload }) 
                     Invisible Automatic Failovers
                   </h4>
                   <p className="text-slate-600 text-xs mt-1">
-                    TetherIQ silently reroutes in-flight prompts to AWS Bedrock, Google Vertex, or Groq without interrupting the active agent CLI session.
+                    TetherMesh silently reroutes in-flight prompts to AWS Bedrock, Google Vertex, or Groq without interrupting the active agent CLI session.
                   </p>
                 </div>
 
@@ -316,7 +316,7 @@ export const HomePage: React.FC<HomePageProps> = ({ navigate, onOpenDownload }) 
                     Hard Circuit-Breaker Spend Caps
                   </h4>
                   <p className="text-slate-600 text-xs mt-1">
-                    Set hard daily/monthly limits ($10/day). If an agent goes rogue, TetherIQ cuts off requests instantly with HTTP 402.
+                    Set hard daily/monthly limits ($10/day). If an agent goes rogue, TetherMesh cuts off requests instantly with HTTP 402.
                   </p>
                 </div>
 
@@ -326,7 +326,7 @@ export const HomePage: React.FC<HomePageProps> = ({ navigate, onOpenDownload }) 
                     1-Click MCP Sync. Zero JSON Config.
                   </h4>
                   <p className="text-slate-600 text-xs mt-1">
-                    Pick a tool, check your target apps, and TetherIQ non-destructively injects verified configs in 5ms with automated .bak backups.
+                    Pick a tool, check your target apps, and TetherMesh non-destructively injects verified configs in 5ms with automated .bak backups.
                   </p>
                 </div>
 
@@ -402,7 +402,7 @@ export const HomePage: React.FC<HomePageProps> = ({ navigate, onOpenDownload }) 
                 </h4>
                 <p className="text-sm text-slate-600 leading-relaxed mb-6">
                   Connect databases, browsers, and GitHub to Cursor, Claude Code, and Windsurf simultaneously without hand-editing config files. 
-                  TetherIQ non-destructively merges verified schemas with automated timestamped backups.
+                  TetherMesh non-destructively merges verified schemas with automated timestamped backups.
                 </p>
               </div>
 
@@ -469,7 +469,7 @@ export const HomePage: React.FC<HomePageProps> = ({ navigate, onOpenDownload }) 
                   100% Local. Zero Cloud Tracking. Your Keys Stay Yours.
                 </h4>
                 <p className="text-sm text-slate-600 leading-relaxed mb-6">
-                  TetherIQ runs privately on your computer. No accounts to create, no external databases, no cloud tracking, and your API keys never leave your machine.
+                  TetherMesh runs privately on your computer. No accounts to create, no external databases, no cloud tracking, and your API keys never leave your machine.
                 </p>
               </div>
 
@@ -598,7 +598,7 @@ export const HomePage: React.FC<HomePageProps> = ({ navigate, onOpenDownload }) 
             <div className="p-5 font-mono text-xs text-slate-200 overflow-x-auto">
               {activeCodeTab === 'claude' && (
                 <pre className="space-y-1">
-                  <span className="text-slate-500"># Point Claude Code to local TetherIQ gateway</span>
+                  <span className="text-slate-500"># Point Claude Code to local TetherMesh gateway</span>
                   <br />
                   <span className="text-cyan-400">export</span> ANTHROPIC_BASE_URL=http://127.0.0.1:4000
                   <br />
@@ -657,7 +657,7 @@ export const HomePage: React.FC<HomePageProps> = ({ navigate, onOpenDownload }) 
             Take Control of Your AI Coding Agents Today
           </h3>
           <p className="text-base text-slate-400 max-w-2xl mx-auto mb-8">
-            Download TetherIQ for free. Eliminate runaway bills, bypass 429 crashes, and sync your MCP toolchain in under 60 seconds.
+            Download TetherMesh for free. Eliminate runaway bills, bypass 429 crashes, and sync your MCP toolchain in under 60 seconds.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">

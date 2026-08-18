@@ -31,24 +31,24 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
 
   const faqs = [
     {
-      q: 'Does TetherIQ log or transmit my codebase or prompts to third-party servers?',
-      a: 'No. TetherIQ operates strictly on localhost (127.0.0.1:4000). All telemetry, spans, token counters, and prompt logs reside strictly in your local computer’s volatile memory / local SQLite database. TetherIQ has zero telemetry servers and zero cloud analytics.'
+      q: 'Does TetherMesh log or transmit my codebase or prompts to third-party servers?',
+      a: 'No. TetherMesh operates strictly on localhost (127.0.0.1:4000). All telemetry, spans, token counters, and prompt logs reside strictly in your local computer’s volatile memory / local SQLite database. TetherMesh has zero telemetry servers and zero cloud analytics.'
     },
     {
       q: 'Where are my provider API keys stored?',
       a: 'Your API keys (OpenAI, Anthropic, AWS Bedrock, Google Vertex, GitHub) are encrypted and stored in your operating system’s native secure vault (macOS Keychain, Windows Credential Manager, or Linux libsecret). They are decrypted in memory only when forming direct, encrypted HTTPS requests to official provider endpoints.'
     },
     {
-      q: 'Can I use TetherIQ completely offline or in air-gapped environments?',
-      a: 'Yes. TetherIQ has native support for local LLM engines like Ollama and LM Studio. You can run offline models (e.g. Qwen2.5-Coder, DeepSeek R1, Llama 3.3) on 127.0.0.1 with zero external internet connectivity.'
+      q: 'Can I use TetherMesh completely offline or in air-gapped environments?',
+      a: 'Yes. TetherMesh has native support for local LLM engines like Ollama and LM Studio. You can run offline models (e.g. Qwen2.5-Coder, DeepSeek R1, Llama 3.3) on 127.0.0.1 with zero external internet connectivity.'
     },
     {
-      q: 'How does TetherIQ prevent corrupting my existing MCP config files?',
-      a: 'TetherIQ utilizes non-destructive JSON merging. It reads your existing ~/.cursor/mcp.json or ~/.claude.json, creates an automated timestamped backup (.bak file) in the same directory, and inserts only verified tool entries without removing custom configurations.'
+      q: 'How does TetherMesh prevent corrupting my existing MCP config files?',
+      a: 'TetherMesh utilizes non-destructive JSON merging. It reads your existing ~/.cursor/mcp.json or ~/.claude.json, creates an automated timestamped backup (.bak file) in the same directory, and inserts only verified tool entries without removing custom configurations.'
     },
     {
-      q: 'How are TetherIQ binary releases verified?',
-      a: 'Every desktop build is compiled transparently via GitHub Actions with published SHA-256 cryptographic checksums. You can verify binary integrity directly on your machine before running (e.g. shasum -a 256 TetherIQ.dmg).'
+      q: 'How are TetherMesh binary releases verified?',
+      a: 'Every desktop build is compiled transparently via GitHub Actions with published SHA-256 cryptographic checksums. You can verify binary integrity directly on your machine before running (e.g. shasum -a 256 TetherMesh.dmg).'
     }
   ];
 
@@ -68,7 +68,7 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
           </h1>
 
           <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto mb-8">
-            TetherIQ runs privately on your computer. No accounts to create, no external databases, no cloud tracking, and your API keys never leave your machine.
+            TetherMesh runs privately on your computer. No accounts to create, no external databases, no cloud tracking, and your API keys never leave your machine.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-medium text-slate-500">
@@ -116,7 +116,7 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
                 </div>
               </div>
 
-              {/* Box 2: TetherIQ Local Engine */}
+              {/* Box 2: TetherMesh Local Engine */}
               <div className="p-6 rounded-xl bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-cyan-500 text-center space-y-3 shadow-lg shadow-cyan-950/50 relative">
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-cyan-500 text-slate-950 font-bold text-[10px] tracking-wider uppercase">
                   100% Localhost
@@ -125,7 +125,7 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
                   <ShieldCheck className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-base">TetherIQ Control Plane</h3>
+                  <h3 className="font-bold text-white text-base">TetherMesh Control Plane</h3>
                   <p className="text-xs text-slate-300 mt-1">
                     Failover Matrix • Spend Cap • MCP Sync • OS Keychain Vault
                   </p>
@@ -180,7 +180,7 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
               </div>
               <h4 className="text-lg font-bold text-slate-900">1. Private On-Device Gateway</h4>
               <p className="text-sm text-slate-600 leading-relaxed">
-                The TetherIQ proxy engine runs strictly on your local machine. It never exposes open external ports or connects to cloud proxy intermediaries.
+                The TetherMesh proxy engine runs strictly on your local machine. It never exposes open external ports or connects to cloud proxy intermediaries.
               </p>
             </div>
 
@@ -202,7 +202,7 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
               </div>
               <h4 className="text-lg font-bold text-slate-900">3. 1-Click Sanitized Debug Redaction</h4>
               <p className="text-sm text-slate-600 leading-relaxed">
-                When generating diagnostic reports for GitHub issues, TetherIQ’s built-in sanitizer automatically redacts all API tokens (<code className="text-xs font-mono text-cyan-800 bg-cyan-50 px-1 py-0.5 rounded">sk-ant-***</code>, <code className="text-xs font-mono text-cyan-800 bg-cyan-50 px-1 py-0.5 rounded">ghp_***</code>).
+                When generating diagnostic reports for GitHub issues, TetherMesh’s built-in sanitizer automatically redacts all API tokens (<code className="text-xs font-mono text-cyan-800 bg-cyan-50 px-1 py-0.5 rounded">sk-ant-***</code>, <code className="text-xs font-mono text-cyan-800 bg-cyan-50 px-1 py-0.5 rounded">ghp_***</code>).
               </p>
             </div>
 
@@ -213,7 +213,7 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
               </div>
               <h4 className="text-lg font-bold text-slate-900">4. Non-Destructive Config Backups</h4>
               <p className="text-sm text-slate-600 leading-relaxed">
-                Before updating any editor config file (<code className="text-xs font-mono text-slate-700 bg-slate-100 px-1 py-0.5 rounded">~/.cursor/mcp.json</code>), TetherIQ creates an automated timestamped backup (<code className="text-xs font-mono text-slate-700 bg-slate-100 px-1 py-0.5 rounded">.bak</code>) ensuring zero config loss.
+                Before updating any editor config file (<code className="text-xs font-mono text-slate-700 bg-slate-100 px-1 py-0.5 rounded">~/.cursor/mcp.json</code>), TetherMesh creates an automated timestamped backup (<code className="text-xs font-mono text-slate-700 bg-slate-100 px-1 py-0.5 rounded">.bak</code>) ensuring zero config loss.
               </p>
             </div>
           </div>
@@ -264,7 +264,7 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
               <p className="text-xs text-slate-600 mt-0.5">Explore our open-source routing core and verification instructions on GitHub.</p>
             </div>
             <a
-              href="https://github.com/alexd/TetherIQ"
+              href="https://github.com/alexd/TetherMesh"
               target="_blank"
               rel="noreferrer"
               className="px-4 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs flex items-center gap-1.5 shrink-0 transition-all"

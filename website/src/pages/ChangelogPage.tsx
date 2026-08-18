@@ -119,7 +119,7 @@ export const ChangelogPage: React.FC<ChangelogPageProps> = ({ navigate, onOpenDo
             <span>Latest: v1.2.0</span>
             <span>•</span>
             <a 
-              href="https://github.com/alexd/TetherIQ/releases" 
+              href="https://github.com/alexd/TetherMesh/releases" 
               target="_blank" 
               rel="noreferrer"
               className="text-cyan-700 hover:text-cyan-800 font-semibold flex items-center gap-1"

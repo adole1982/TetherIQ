@@ -45,11 +45,10 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, navigate, onOpenDo
             className="flex items-center space-x-3 group text-left focus:outline-none"
           >
             <img 
-              src="/brand/generated/tetheriq-navbar-lockup.png" 
-              alt="TetherIQ Logo" 
+              src="/brand/generated/tethermesh-navbar-lockup.png" 
+              alt="TetherMesh Logo" 
               className="h-8 sm:h-9 object-contain transition-transform group-hover:scale-[1.02]"
               onError={(e) => {
-                // Fallback rendering in case path is loading
                 const target = e.currentTarget as HTMLImageElement;
                 target.style.display = 'none';
               }}

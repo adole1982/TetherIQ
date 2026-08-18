@@ -224,7 +224,7 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
               </div>
               <div>
                 <span className="font-bold text-white text-sm">Automated Multi-Target Configuration Injection</span>
-                <p className="text-slate-400">TetherIQ writes verified JSON schemas to all your installed IDEs in parallel with automatic .bak rollbacks.</p>
+                <p className="text-slate-400">TetherMesh writes verified JSON schemas to all your installed IDEs in parallel with automatic .bak rollbacks.</p>
               </div>
             </div>
 

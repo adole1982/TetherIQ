@@ -49,7 +49,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, onClose })
     setTimeout(() => setCopiedCmd(false), 2000);
   };
 
-  const curlCmd = 'curl -fsSL https://tetheriq.dev/install.sh | bash';
+  const curlCmd = 'curl -fsSL https://tethermesh.dev/install.sh | bash';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-200">
@@ -61,13 +61,13 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, onClose })
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center space-x-3">
             <img 
-              src="/brand/generated/tetheriq-emblem.png" 
-              alt="TetherIQ Emblem" 
+              src="/brand/generated/tethermesh-emblem.png" 
+              alt="TetherMesh Emblem" 
               className="w-7 h-7 object-contain"
             />
             <div>
               <h3 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                Download TetherIQ Desktop
+                Download TetherMesh Desktop
                 <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 font-semibold border border-cyan-200">
                   v1.2.0 Stable
                 </span>
@@ -144,7 +144,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, onClose })
                     <span className="font-mono text-[10px]">SHA-256</span>
                   </button>
                   <a
-                    href="https://github.com/alexd/TetherIQ/releases/latest"
+                    href="https://github.com/adole1982/TetherMesh/releases/latest"
                     target="_blank"
                     rel="noreferrer"
                     className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs flex items-center gap-1.5 shadow-sm transition-all"
@@ -187,7 +187,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, onClose })
                     <span className="font-mono text-[10px]">SHA-256</span>
                   </button>
                   <a
-                    href="https://github.com/alexd/TetherIQ/releases/latest"
+                    href="https://github.com/adole1982/TetherMesh/releases/latest"
                     target="_blank"
                     rel="noreferrer"
                     className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs flex items-center gap-1.5 shadow-sm transition-all"
@@ -230,7 +230,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, onClose })
                     <span className="font-mono text-[10px]">SHA-256</span>
                   </button>
                   <a
-                    href="https://github.com/alexd/TetherIQ/releases/latest"
+                    href="https://github.com/adole1982/TetherMesh/releases/latest"
                     target="_blank"
                     rel="noreferrer"
                     className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs flex items-center gap-1.5 shadow-sm transition-all"

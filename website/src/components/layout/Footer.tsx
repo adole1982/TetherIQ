@@ -26,8 +26,8 @@ export const Footer: React.FC<FooterProps> = ({ navigate, onOpenDownload }) => {
           <div className="lg:col-span-2 space-y-4">
             <div className="flex items-center space-x-3">
               <img 
-                src="/brand/generated/tetheriq-navbar-lockup-dark.png" 
-                alt="TetherIQ Logo" 
+                src="/brand/generated/tethermesh-navbar-lockup-dark.png" 
+                alt="TetherMesh Logo" 
                 className="h-8 object-contain"
                 onError={(e) => {
                   const target = e.currentTarget as HTMLImageElement;
@@ -156,7 +156,7 @@ export const Footer: React.FC<FooterProps> = ({ navigate, onOpenDownload }) => {
 
         {/* Bottom copyright & attribution */}
         <div className="mt-12 pt-8 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
-          <p>© {new Date().getFullYear()} TetherIQ. All rights reserved. 100% Local-First Software.</p>
+          <p>© {new Date().getFullYear()} TetherMesh. All rights reserved. 100% Local-First Software.</p>
           <div className="flex items-center space-x-4">
             <span className="flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
