@@ -166,7 +166,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ navigate, onOpenDownload }) 
               <div className="p-3.5 rounded-xl bg-cyan-50/70 border border-cyan-200 flex items-start space-x-2 text-xs text-cyan-900">
                 <Lock className="w-4 h-4 text-cyan-700 shrink-0 mt-0.5" />
                 <span>
-                  <strong>Security Note:</strong> Keys are encrypted in your operating system's native secure vault (macOS Keychain, Windows Credential Manager). They never touch external cloud servers.
+                  <strong>Security Note:</strong> Master provider API keys (Anthropic, OpenAI, AWS, Groq) are stored securely in your operating system's native encrypted vault (macOS Keychain, Windows Credential Manager). MCP tool configs are synchronized locally to your editor JSON files with automated <code className="bg-cyan-100/80 px-1 py-0.5 rounded font-mono text-[11px]">.bak</code> backups.
                 </span>
               </div>
             </div>

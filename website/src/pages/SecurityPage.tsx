@@ -36,7 +36,7 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
     },
     {
       q: 'Where are my provider API keys stored?',
-      a: 'Your API keys (OpenAI, Anthropic, AWS Bedrock, Google Vertex, GitHub) are encrypted and stored in your operating system’s native secure vault (macOS Keychain, Windows Credential Manager, or Linux libsecret). They are decrypted in memory only when forming direct, encrypted HTTPS requests to official provider endpoints.'
+      a: 'Your master LLM provider API keys (Anthropic, OpenAI, AWS Bedrock, Google Vertex, Groq) are encrypted and stored in your operating system’s native secure vault (macOS Keychain, Windows Credential Manager, or Linux libsecret). For editor MCP tools (e.g. GitHub, Postgres), TetherMesh non-destructively syncs configurations directly to your local editor JSON files (like ~/.cursor/mcp.json) with automated timestamped .bak backups.'
     },
     {
       q: 'Can I use TetherMesh completely offline or in air-gapped environments?',
@@ -189,9 +189,9 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
               <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
                 <Key className="w-5 h-5" />
               </div>
-              <h4 className="text-lg font-bold text-slate-900">2. OS-Native Keychain Storage</h4>
+              <h4 className="text-lg font-bold text-slate-900">2. OS Keychain Vault for Master Keys</h4>
               <p className="text-sm text-slate-600 leading-relaxed">
-                API credentials are encrypted with your operating system’s native security enclave (macOS Keychain, Windows Credential Manager). They never exist as raw plaintext on disk.
+                Master LLM API credentials (Anthropic, OpenAI, AWS, Groq) are encrypted inside your operating system’s native security enclave (macOS Keychain, Windows Credential Manager). They are never saved as raw plaintext on disk.
               </p>
             </div>
 
