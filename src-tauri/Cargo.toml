@@ -1,12 +1,12 @@
 [package]
-name = "tetheriq"
+name = "tethermesh"
 version = "1.0.0"
-description = "TetherIQ - Zero-config local desktop control plane and proxy gateway for autonomous AI coding agents"
-authors = ["TetherIQ Team"]
+description = "TetherMesh - Zero-config local desktop control plane and proxy gateway for autonomous AI coding agents"
+authors = ["TetherMesh Team"]
 edition = "2021"
 
 [lib]
-name = "tetheriq_lib"
+name = "tethermesh_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

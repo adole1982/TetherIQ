@@ -1,24 +1,16 @@
 import React, { useState } from 'react';
 import { 
   Search, 
-  Layers, 
-  Clock, 
-  Activity, 
-  ArrowRight, 
-  Filter, 
-  CheckCircle2, 
-  AlertTriangle, 
-  ExternalLink,
   ChevronRight,
   Database,
-  Terminal
+  Terminal,
+  Activity
 } from 'lucide-react';
 import { useTetherStore } from '../../store/useTetherStore';
-import { ActivityTrace } from '../../types/traces';
 import { TraceDetailModal } from './TraceDetailModal';
 
 export const ObservabilityTraces: React.FC = () => {
-  const { traces, selectedTrace, setSelectedTrace } = useTetherStore();
+  const { traces, setSelectedTrace } = useTetherStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
 
@@ -46,8 +38,8 @@ export const ObservabilityTraces: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-2 text-xs font-mono bg-slate-950 px-3 py-2 rounded-lg border border-slate-800">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-slate-300">Live Tracing Stream: Active</span>
+          <span className={`w-2 h-2 rounded-full ${traces.length > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+          <span className="text-slate-300">{traces.length} Logged {traces.length === 1 ? 'Trace' : 'Traces'}</span>
         </div>
       </div>
 
@@ -91,71 +83,85 @@ export const ObservabilityTraces: React.FC = () => {
           <div className="col-span-2 text-right">Waterfall Timeline</div>
         </div>
 
-        <div className="divide-y divide-slate-800/60">
-          {filteredTraces.map((trace) => {
-            const timeAgo = Math.round((Date.now() - trace.timestamp) / 1000);
-            return (
-              <div
-                key={trace.id}
-                onClick={() => setSelectedTrace(trace)}
-                className="px-4 py-3.5 hover:bg-slate-800/40 transition-colors grid grid-cols-12 gap-2 items-center text-xs cursor-pointer select-none"
-              >
-                {/* 1. Client & ID */}
-                <div className="col-span-3 space-y-0.5">
-                  <div className="flex items-center space-x-2">
-                    <span className="font-bold text-white">{trace.clientName}</span>
-                    <span className="text-[10px] font-mono text-slate-500 bg-slate-950 px-1 rounded border border-slate-800">
-                      {trace.traceId}
+        {filteredTraces.length > 0 ? (
+          <div className="divide-y divide-slate-800/60">
+            {filteredTraces.map((trace) => {
+              const timeAgo = Math.max(0, Math.round((Date.now() - trace.timestamp) / 1000));
+              return (
+                <div
+                  key={trace.id}
+                  onClick={() => setSelectedTrace(trace)}
+                  className="px-4 py-3.5 hover:bg-slate-800/40 transition-colors grid grid-cols-12 gap-2 items-center text-xs cursor-pointer select-none"
+                >
+                  {/* 1. Client & ID */}
+                  <div className="col-span-3 space-y-0.5">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-bold text-white">{trace.clientName}</span>
+                      <span className="text-[10px] font-mono text-slate-500 bg-slate-950 px-1 rounded border border-slate-800">
+                        {trace.traceId}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-500 font-mono">{timeAgo}s ago</span>
+                  </div>
+
+                  {/* 2. Model / Tool */}
+                  <div className="col-span-3 space-y-0.5">
+                    <div className="flex items-center space-x-1.5">
+                      {trace.type === 'mcp-tool' ? (
+                        <Database className="w-3.5 h-3.5 text-cyan-400" />
+                      ) : (
+                        <Terminal className="w-3.5 h-3.5 text-blue-400" />
+                      )}
+                      <span className="font-mono text-slate-200 text-xs truncate">{trace.modelServed}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-mono">{trace.providerServed}</div>
+                  </div>
+
+                  {/* 3. Latency & Status */}
+                  <div className="col-span-2 space-y-0.5">
+                    <div className="flex items-center space-x-1.5">
+                      <span className={`w-2 h-2 rounded-full ${trace.status === 'success' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                      <span className="font-mono text-white font-semibold">{trace.totalDurationMs} ms</span>
+                    </div>
+                    <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
+                      trace.status === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                    }`}>
+                      {trace.status}
                     </span>
                   </div>
-                  <span className="text-[11px] text-slate-500 font-mono">{timeAgo}s ago</span>
-                </div>
 
-                {/* 2. Model / Tool */}
-                <div className="col-span-3 space-y-0.5">
-                  <div className="flex items-center space-x-1.5">
-                    {trace.type === 'mcp-tool' ? (
-                      <Database className="w-3.5 h-3.5 text-cyan-400" />
-                    ) : (
-                      <Terminal className="w-3.5 h-3.5 text-blue-400" />
-                    )}
-                    <span className="font-mono text-slate-200 text-xs truncate">{trace.modelServed}</span>
+                  {/* 4. Tokens & Cost */}
+                  <div className="col-span-2 space-y-0.5 font-mono">
+                    <div className="text-slate-300 font-medium">{trace.totalTokens.toLocaleString()} tok</div>
+                    <div className="text-cyan-400 text-[11px] font-bold">${trace.cost.toFixed(4)}</div>
                   </div>
-                  <div className="text-[11px] text-slate-500 font-mono">{trace.providerServed}</div>
-                </div>
 
-                {/* 3. Latency & Status */}
-                <div className="col-span-2 space-y-0.5">
-                  <div className="flex items-center space-x-1.5">
-                    <span className={`w-2 h-2 rounded-full ${trace.status === 'success' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                    <span className="font-mono text-white font-semibold">{trace.totalDurationMs} ms</span>
+                  {/* 5. Mini Waterfall */}
+                  <div className="col-span-2 flex items-center justify-end space-x-2">
+                    <div className="w-24 h-2 bg-slate-950 rounded-full overflow-hidden flex border border-slate-800">
+                      <div className="h-full bg-cyan-500" style={{ width: '30%' }} />
+                      <div className="h-full bg-blue-500" style={{ width: '55%' }} />
+                      <div className="h-full bg-emerald-500" style={{ width: '15%' }} />
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-slate-600" />
                   </div>
-                  <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
-                    trace.status === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                  }`}>
-                    {trace.status}
-                  </span>
                 </div>
-
-                {/* 4. Tokens & Cost */}
-                <div className="col-span-2 space-y-0.5 font-mono">
-                  <div className="text-slate-300 font-medium">{trace.totalTokens.toLocaleString()} tok</div>
-                  <div className="text-cyan-400 text-[11px] font-bold">${trace.cost.toFixed(4)}</div>
-                </div>
-
-                {/* 5. Mini Waterfall */}
-                <div className="col-span-2 flex items-center justify-end space-x-2">
-                  <div className="w-24 h-2 bg-slate-950 rounded-full overflow-hidden flex border border-slate-800">
-                    <div className="h-full bg-cyan-500" style={{ width: '30%' }} />
-                    <div className="h-full bg-blue-500" style={{ width: '55%' }} />
-                    <div className="h-full bg-emerald-500" style={{ width: '15%' }} />
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-600" />
-                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-12 text-center flex flex-col items-center justify-center space-y-3">
+            <div className="p-3 rounded-full bg-slate-950 border border-slate-800">
+              <Activity className="w-8 h-8 text-slate-600 animate-pulse" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-white">No traces recorded yet</div>
+              <div className="text-xs text-slate-400 max-w-sm mt-1">
+                Requests received by the proxy on <code className="text-cyan-300 font-mono">127.0.0.1:4000</code> will stream here with full span duration breakdowns and prompt inspectors.
               </div>
-            );
-          })}
-        </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Trace Detail Inspector Modal */}

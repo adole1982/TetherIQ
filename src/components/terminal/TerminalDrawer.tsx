@@ -37,14 +37,14 @@ export const TerminalDrawer: React.FC = () => {
     if (!inputCommand.trim()) return;
 
     const cmd = inputCommand.trim();
-    appendTerminalLog(`PS C:\\Projects\\TetherIQ> ${cmd}`);
+    appendTerminalLog(`PS C:\\Projects\\TetherMesh> ${cmd}`);
     setInputCommand('');
 
     // Simulated terminal agent runner response
     setTimeout(() => {
       if (cmd.startsWith('claude')) {
         appendTerminalLog(`[Claude Code] Initializing session via ANTHROPIC_BASE_URL=http://127.0.0.1:${proxyPort}...`);
-        appendTerminalLog(`[Claude Code] TetherIQ Local Gateway Connected (Zero Latency Loopback).`);
+        appendTerminalLog(`[Claude Code] TetherMesh Local Gateway Connected (Zero Latency Loopback).`);
         appendTerminalLog(`[Claude Code] Ready. Type your coding prompt.`);
       } else if (cmd.startsWith('aider')) {
         appendTerminalLog(`[Aider] Connecting to model via http://127.0.0.1:${proxyPort}/v1...`);
@@ -54,9 +54,9 @@ export const TerminalDrawer: React.FC = () => {
       } else if (cmd === 'env' || cmd === 'Get-ChildItem env:') {
         appendTerminalLog(`ANTHROPIC_BASE_URL = http://127.0.0.1:${proxyPort}`);
         appendTerminalLog(`OPENAI_BASE_URL = http://127.0.0.1:${proxyPort}/v1`);
-        appendTerminalLog(`TETHERIQ_ACTIVE = 1`);
+        appendTerminalLog(`TETHERMESH_ACTIVE = 1`);
       } else {
-        appendTerminalLog(`[TetherIQ Subshell] Executed: ${cmd}`);
+        appendTerminalLog(`[TetherMesh Subshell] Executed: ${cmd}`);
       }
     }, 120);
   };
@@ -77,7 +77,7 @@ export const TerminalDrawer: React.FC = () => {
 
         <div className="flex items-center space-x-2 text-slate-400">
           <button
-            onClick={() => appendTerminalLog('PS C:\\Projects\\TetherIQ> export ANTHROPIC_BASE_URL=http://127.0.0.1:4000')}
+            onClick={() => appendTerminalLog('PS C:\\Projects\\TetherMesh> export ANTHROPIC_BASE_URL=http://127.0.0.1:4000')}
             className="text-[11px] text-cyan-400 hover:underline mr-2"
           >
             Inject Env Vars
@@ -115,7 +115,7 @@ export const TerminalDrawer: React.FC = () => {
           <div
             key={index}
             className={`leading-relaxed ${
-              log.includes('TetherIQ')
+              log.includes('TetherMesh')
                 ? 'text-cyan-400'
                 : log.includes('PS C:\\')
                 ? 'text-slate-100 font-semibold'

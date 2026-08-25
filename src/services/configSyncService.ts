@@ -1,24 +1,64 @@
-import { InstalledToolState, McpToolDefinition, TargetClientId } from '../types/tools';
+﻿import { InstalledToolState, McpToolDefinition, TargetClientId } from '../types/tools';
 import { ClientSyncResult } from '../types/config';
 import { TARGET_CLIENTS_META } from '../data/mcpCatalogData';
 
+export interface SyncOptions {
+  platform?: 'win32' | 'darwin' | 'linux';
+  customEnv?: { userProfile?: string; appData?: string; home?: string };
+  writeToDisk?: boolean;
+  createBackups?: boolean;
+  mockExistingFiles?: Record<string, string>;
+}
+
 export class ConfigSyncService {
+  /**
+   * Automatically detects current operating system
+   */
+  public static detectPlatform(): 'win32' | 'darwin' | 'linux' {
+    if (typeof process !== 'undefined' && process.platform) {
+      if (process.platform === 'win32') return 'win32';
+      if (process.platform === 'darwin') return 'darwin';
+      return 'linux';
+    }
+    if (typeof navigator !== 'undefined') {
+      const userAgent = navigator.userAgent.toLowerCase();
+      if (userAgent.includes('win')) return 'win32';
+      if (userAgent.includes('mac')) return 'darwin';
+      return 'linux';
+    }
+    return 'win32';
+  }
+
   /**
    * Resolve an OS path with environment variables and home expansion
    */
-  public static resolvePath(rawPath: string, platform: 'win32' | 'darwin' | 'linux' = 'win32'): string {
+  public static resolvePath(
+    rawPath: string,
+    platform: 'win32' | 'darwin' | 'linux' = 'win32',
+    customEnv?: { userProfile?: string; appData?: string; home?: string }
+  ): string {
     let resolved = rawPath;
     if (platform === 'win32') {
-      const userProfile = 'C:\\Users\\Developer';
-      const appData = 'C:\\Users\\Developer\\AppData\\Roaming';
+      const userProfile = customEnv?.userProfile || (typeof process !== 'undefined' && process.env?.USERPROFILE) || 'C:\\Users\\Developer';
+      const appData = customEnv?.appData || (typeof process !== 'undefined' && process.env?.APPDATA) || `${userProfile}\\AppData\\Roaming`;
       resolved = resolved
         .replace(/%USERPROFILE%/gi, userProfile)
         .replace(/%APPDATA%/gi, appData);
     } else {
-      const home = '/Users/developer';
+      const home = customEnv?.home || (typeof process !== 'undefined' && process.env?.HOME) || '/Users/developer';
       resolved = resolved.replace(/^~(?=$|\/|\\)/, home);
     }
     return resolved;
+  }
+
+  /**
+   * Strip single and multi-line comments from JSONC before parsing
+   */
+  public static stripJsonComments(jsonc: string): string {
+    return jsonc
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^\\:])\/\/.*$/gm, '$1')
+      .trim();
   }
 
   /**
@@ -31,14 +71,14 @@ export class ConfigSyncService {
     const env: Record<string, string> = { ...tool.defaultEnv };
     for (const field of tool.fields) {
       const value = installed.credentials[field.key] || field.defaultValue;
-      if (value) {
-        env[field.key] = value;
+      if (value !== undefined && value !== null && value !== '') {
+        env[field.key] = String(value);
       }
     }
 
     return {
       command: tool.command,
-      args: tool.args,
+      args: [...tool.args],
       env: Object.keys(env).length > 0 ? env : {}
     };
   }
@@ -54,13 +94,14 @@ export class ConfigSyncService {
     let parsed: any = {};
     try {
       if (existingJsonStr && existingJsonStr.trim().length > 0) {
-        parsed = JSON.parse(existingJsonStr);
+        const sanitized = ConfigSyncService.stripJsonComments(existingJsonStr);
+        parsed = JSON.parse(sanitized);
       }
     } catch {
       parsed = {};
     }
 
-    const rootKey = clientTarget === 'devin' ? 'mcpServers' : 'mcpServers';
+    const rootKey = 'mcpServers';
 
     if (!parsed[rootKey] || typeof parsed[rootKey] !== 'object' || Array.isArray(parsed[rootKey])) {
       parsed[rootKey] = {};
@@ -72,9 +113,11 @@ export class ConfigSyncService {
       injectedCount++;
     }
 
-    // Claude Code also accepts ANTHROPIC_BASE_URL inside settings
+    // Claude Code CLI also accepts ANTHROPIC_BASE_URL inside settings / env
     if (clientTarget === 'claude-code') {
-      if (!parsed.env) parsed.env = {};
+      if (!parsed.env || typeof parsed.env !== 'object' || Array.isArray(parsed.env)) {
+        parsed.env = {};
+      }
       parsed.env.ANTHROPIC_BASE_URL = 'http://127.0.0.1:4000';
     }
 
@@ -85,13 +128,61 @@ export class ConfigSyncService {
   }
 
   /**
+   * Safely writes a file to disk with atomic write and automated .bak backup
+   */
+  public static async writeConfigFileSafely(
+    filePath: string,
+    content: string,
+    createBackup: boolean = true
+  ): Promise<{ success: boolean; backupCreated?: string; error?: string }> {
+    try {
+      // Check Node.js fs availability
+      if (typeof process !== 'undefined' && process.versions?.node) {
+        const fs = await import('fs');
+        const path = await import('path');
+
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+
+        let backupCreated: string | undefined;
+        if (createBackup && fs.existsSync(filePath)) {
+          const backupPath = `${filePath}.bak`;
+          fs.copyFileSync(filePath, backupPath);
+          backupCreated = backupPath;
+        }
+
+        // Atomic write via temp file
+        const tempPath = `${filePath}.tmp.${Date.now()}`;
+        fs.writeFileSync(tempPath, content, 'utf8');
+        fs.renameSync(tempPath, filePath);
+
+        return { success: true, backupCreated };
+      }
+
+      // Browser / webview storage fallback
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(`tether_file_${filePath}`, content);
+        return { success: true };
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || String(err) };
+    }
+  }
+
+  /**
    * Perform sync across all selected client targets
    */
   public static async syncToolsToTargetClients(
     installedTools: InstalledToolState[],
     allToolDefs: McpToolDefinition[],
-    mockExistingFiles: Record<string, string> = {}
+    options: SyncOptions = {}
   ): Promise<ClientSyncResult[]> {
+    const platform = options.platform || ConfigSyncService.detectPlatform();
+    const mockFiles = options.mockExistingFiles || {};
     const results: ClientSyncResult[] = [];
     const clientMap = new Map<TargetClientId, McpToolDefinition[]>();
 
@@ -117,8 +208,30 @@ export class ConfigSyncService {
       const tools = clientMap.get(meta.id) || [];
       if (tools.length === 0) continue;
 
-      const path = ConfigSyncService.resolvePath(meta.defaultConfigPathWin, 'win32');
-      const existing = mockExistingFiles[path] || '{\n  "mcpServers": {}\n}';
+      const rawPath = platform === 'win32'
+        ? meta.defaultConfigPathWin
+        : platform === 'darwin'
+        ? meta.defaultConfigPathMac
+        : meta.defaultConfigPathLinux;
+
+      const resolvedPath = ConfigSyncService.resolvePath(rawPath, platform, options.customEnv);
+      
+      // Determine existing content
+      let existingContent = mockFiles[resolvedPath];
+      if (!existingContent && typeof process !== 'undefined' && process.versions?.node) {
+        try {
+          const fs = await import('fs');
+          if (fs.existsSync(resolvedPath)) {
+            existingContent = fs.readFileSync(resolvedPath, 'utf8');
+          }
+        } catch {
+          // ignore read error, fallback to default
+        }
+      }
+
+      if (!existingContent) {
+        existingContent = '{\n  "mcpServers": {}\n}';
+      }
 
       const formattedTools = tools.map(t => {
         const inst = installedTools.find(i => i.toolId === t.id)!;
@@ -129,21 +242,34 @@ export class ConfigSyncService {
       });
 
       const { updatedJsonStr, injectedCount } = ConfigSyncService.mergeConfigNonDestructive(
-        existing,
+        existingContent,
         formattedTools,
         meta.id
       );
 
-      // In browser / dev environment, save into localStorage / state store
-      localStorage.setItem(`tether_client_config_${meta.id}`, updatedJsonStr);
+      // In browser / storage mode, also persist to localStorage
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(`tether_client_config_${meta.id}`, updatedJsonStr);
+      }
+
+      let writeResult: { success: boolean; backupCreated?: string; error?: string } = { success: true };
+      if (options.writeToDisk) {
+        writeResult = await ConfigSyncService.writeConfigFileSafely(
+          resolvedPath,
+          updatedJsonStr,
+          options.createBackups !== false
+        );
+      }
 
       results.push({
         clientId: meta.id,
         clientName: meta.name,
-        filePath: path,
-        isSuccess: true,
+        filePath: resolvedPath,
+        isSuccess: writeResult.success,
         toolsInjected: injectedCount,
-        message: `Successfully synchronized ${injectedCount} MCP tools to ${meta.name}`,
+        message: writeResult.success
+          ? `Successfully synchronized ${injectedCount} MCP tools to ${meta.name}${writeResult.backupCreated ? ` (Backup created at ${writeResult.backupCreated})` : ''}`
+          : `Failed to write config: ${writeResult.error}`,
         timestamp: Date.now()
       });
     }

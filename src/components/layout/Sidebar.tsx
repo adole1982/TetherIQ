@@ -7,7 +7,7 @@ import {
   Users, 
   Settings, 
   BookOpen,
-  Zap
+  Network
 } from 'lucide-react';
 import { useTetherStore, NavTab } from '../../store/useTetherStore';
 
@@ -81,7 +81,7 @@ export const Sidebar: React.FC = () => {
           </div>
           <div className="font-mono text-cyan-300 text-[11px] bg-slate-950 px-2 py-1 rounded border border-slate-800/80 flex items-center justify-between">
             <span>http://127.0.0.1:4000</span>
-            <Zap className="w-3 h-3 text-cyan-400 opacity-70" />
+            <Network className="w-3 h-3 text-cyan-400 opacity-70" />
           </div>
         </div>
       </div>

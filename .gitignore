@@ -12,6 +12,7 @@ build/
 
 # Tauri / Rust build artifacts
 src-tauri/target/
+src-tauri/binaries/
 
 # Logs
 npm-debug.log*
@@ -43,3 +44,14 @@ Thumbs.db
 
 # Vercel
 .vercel
+
+# Python / Sidecar virtual environments
+.venv/
+venv/
+sidecar/.venv/
+__pycache__/
+*.pyc
+sidecar_test.log
+.tether/
+*.tsbuildinfo
+

@@ -1,4 +1,4 @@
-# TetherIQ ⚡
+# TetherMesh ⚡
 
 > **Zero-config local desktop control plane and proxy gateway (`127.0.0.1:4000`) for autonomous AI coding agents.**  
 > Provides automatic model failovers, hard runaway spend caps, 1-click dynamic MCP tool syncing across 6+ client environments, live token telemetry HUD, and full-spectrum activity tracing.
@@ -7,11 +7,11 @@
 
 ## ⚡ 60-Second Quickstart Guide
 
-Get up and running with TetherIQ in 3 effortless steps:
+Get up and running with TetherMesh in 3 effortless steps:
 
-### 1. Download & Launch TetherIQ
-- Run the TetherIQ desktop application (`.exe`, `.dmg`, or `.deb`).
-- TetherIQ automatically spins up the local proxy gateway on `http://127.0.0.1:4000`.
+### 1. Download & Launch TetherMesh
+- Run the TetherMesh desktop application (`.exe`, `.dmg`, or `.deb`).
+- TetherMesh automatically spins up the local proxy gateway on `http://127.0.0.1:4000`.
 
 ### 2. Enter Your Provider API Keys
 - Click **"Keys"** or open the **60-Second Quickstart Wizard** in the top bar.
@@ -26,12 +26,12 @@ Choose your agent below and connect in one step:
 export ANTHROPIC_BASE_URL=http://127.0.0.1:4000
 claude
 ```
-*Or click "Auto-Configure Claude Code" in TetherIQ to inject it into `~/.claude.json`.*
+*Or click "Auto-Configure Claude Code" in TetherMesh to inject it into `~/.claude.json`.*
 
 #### 🟣 AI IDEs (Cursor, Windsurf, Devin, Antigravity)
 - **Base URL:** `http://127.0.0.1:4000/v1`
 - **Model:** `fast-code` (low-latency) or `heavy-reasoning` (deep reasoning)
-- **MCP Auto-Sync:** Click **"Connect & Auto-Configure All Files"** in TetherIQ's Tool Hub to inject any of the 50+ MCP servers into `~/.cursor/mcp.json`, `~/.codeium/windsurf/mcp_config.json`, `devin.json`, or `.mcp.json`.
+- **MCP Auto-Sync:** Click **"Connect & Auto-Configure All Files"** in TetherMesh's Tool Hub to inject any of the 50+ MCP servers into `~/.cursor/mcp.json`, `~/.codeium/windsurf/mcp_config.json`, `devin.json`, or `.mcp.json`.
 
 #### 🔵 Python & TypeScript SDKs
 ```python
@@ -39,7 +39,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://127.0.0.1:4000/v1",
-    api_key="tetheriq-local"
+    api_key="tethermesh-local"
 )
 
 response = client.chat.completions.create(
@@ -64,7 +64,7 @@ print(response.choices[0].message.content)
 
 3. **Hard Runaway Spend Circuit Breakers:**
    - Visual daily and monthly spend limit dials (e.g. \$10.00/day).
-   - Automatically short-circuits runaway recursive agent loops with `HTTP 402 Budget Exceeded: TetherIQ spend limit reached`.
+   - Automatically short-circuits runaway recursive agent loops with `HTTP 402 Budget Exceeded: TetherMesh spend limit reached`.
 
 4. **50+ Official & Verified MCP Tool Marketplace:**
    - Verified schemas for **Databricks, Snowflake, Supabase, PostgreSQL, Notion, Slack, Jira, GitHub, Docker, Sentry, Brave Search, Pinecone**, and 40+ more.
@@ -91,12 +91,15 @@ npm install
 # Start Vite React UI
 npm run dev
 
-# Start local proxy gateway core
-npm run proxy
+# (Option A) Run LiteLLM Proxy in Development
+litellm --port 4000 --host 127.0.0.1 --config sidecar/dev_config.yaml
 
-# Build production bundle
+# (Option B) Build LiteLLM Standalone Sidecar Binary (Windows)
+npm run sidecar:build
+
+# Build production frontend bundle
 npm run build
 ```
 
 ---
-*Built with Tauri v2, React 19, TypeScript, Tailwind CSS, and LiteLLM gateway core.*
+*Built with Tauri v2, React 19, TypeScript, Tailwind CSS, and official LiteLLM Proxy Core.*

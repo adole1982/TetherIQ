@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Titlebar } from './Titlebar';
 import { Sidebar } from './Sidebar';
 import { useTetherStore } from '../../store/useTetherStore';
@@ -15,7 +15,13 @@ import { DiagnosticReportModal } from '../settings/DiagnosticReportModal';
 import { TerminalDrawer } from '../terminal/TerminalDrawer';
 
 export const MainLayout: React.FC = () => {
-  const { activeTab } = useTetherStore();
+  const { activeTab, fetchGatewayHealth } = useTetherStore();
+
+  useEffect(() => {
+    fetchGatewayHealth();
+    const interval = setInterval(fetchGatewayHealth, 3000);
+    return () => clearInterval(interval);
+  }, [fetchGatewayHealth]);
 
   const renderTabContent = () => {
     switch (activeTab) {

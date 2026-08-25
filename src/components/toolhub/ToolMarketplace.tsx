@@ -68,7 +68,7 @@ export const ToolMarketplace: React.FC = () => {
           </div>
           <h1 className="text-xl font-extrabold text-white tracking-tight">50+ Official MCP Tool Catalog</h1>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Select any tool, enter credentials in the dynamic wizard, and check off target clients (<span className="text-cyan-300 font-mono">Cursor, Windsurf, Devin, Claude Code, Claude Desktop, Antigravity</span>) for non-destructive multi-file injection.
+            Select any tool, enter credentials in the dynamic wizard, and check off target clients (<span className="text-cyan-300 font-mono">Cursor, Windsurf, Devin, Claude Code, Claude Desktop, Antigravity</span>) for non-destructive multi-file injection. <span className="text-amber-300 font-semibold">Auto-sync coming in V2 • Manual copy for now.</span>
           </p>
         </div>
 
@@ -78,7 +78,7 @@ export const ToolMarketplace: React.FC = () => {
           className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs shadow-lg shadow-cyan-500/20 transition-all"
         >
           <Zap className="w-4 h-4 fill-slate-950" />
-          <span>{isSyncing ? 'Synchronizing Files...' : 'Sync Configs Now'}</span>
+          <span>{isSyncing ? 'Copying Config...' : 'Copy Config'}</span>
         </button>
       </div>
 

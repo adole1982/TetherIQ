@@ -19,7 +19,7 @@ export const CLIENT_INTEGRATIONS: ClientIntegrationGuide[] = [
     name: 'Claude Code CLI',
     category: 'cli',
     badge: 'Recommended',
-    description: 'Anthropic\'s official terminal agent. Injects TetherIQ proxy gateway as base URL with automatic model failover & spend limits.',
+    description: 'Anthropic\'s official terminal agent. Injects TetherMesh proxy gateway as base URL with automatic model failover & spend limits.',
     icon: 'Terminal',
     oneClickAutoConfigAvailable: true,
     commandSnippet: 'export ANTHROPIC_BASE_URL=http://127.0.0.1:4000\nclaude',
@@ -32,7 +32,7 @@ export const CLIENT_INTEGRATIONS: ClientIntegrationGuide[] = [
     name: 'Cursor IDE',
     category: 'ide',
     badge: 'Popular',
-    description: 'AI code editor. Route all Cursor Composer and Chat completions through TetherIQ with OpenAI compatibility and MCP sync.',
+    description: 'AI code editor. Route all Cursor Composer and Chat completions through TetherMesh with OpenAI compatibility and MCP sync.',
     icon: 'Code2',
     oneClickAutoConfigAvailable: true,
     commandSnippet: '# Cursor Settings -> Models -> OpenAI API Key -> Base URL\nhttp://127.0.0.1:4000/v1',
@@ -45,11 +45,11 @@ export const CLIENT_INTEGRATIONS: ClientIntegrationGuide[] = [
     name: 'Windsurf IDE (Cascade)',
     category: 'ide',
     badge: 'Cascade Agent',
-    description: 'Codeium Windsurf editor. Connect Cascade to the TetherIQ gateway and auto-sync your 50+ MCP tool definitions.',
+    description: 'Codeium Windsurf editor. Connect Cascade to the TetherMesh gateway and auto-sync your 50+ MCP tool definitions.',
     icon: 'Compass',
     oneClickAutoConfigAvailable: true,
     commandSnippet: '# Windsurf MCP Settings File\n~/.codeium/windsurf/mcp_config.json',
-    codeSnippet: '{\n  "mcpServers": {\n    /* auto-injected by TetherIQ */\n  }\n}',
+    codeSnippet: '{\n  "mcpServers": {\n    /* auto-injected by TetherMesh */\n  }\n}',
     configLocationDescription: '~/.codeium/windsurf/mcp_config.json',
     docsUrl: 'https://codeium.com/windsurf'
   },
@@ -62,7 +62,7 @@ export const CLIENT_INTEGRATIONS: ClientIntegrationGuide[] = [
     icon: 'Bot',
     oneClickAutoConfigAvailable: true,
     commandSnippet: '# Devin Workspace Config\ndevin.json',
-    codeSnippet: '{\n  "mcpServers": {\n    /* auto-injected by TetherIQ */\n  }\n}',
+    codeSnippet: '{\n  "mcpServers": {\n    /* auto-injected by TetherMesh */\n  }\n}',
     configLocationDescription: '~/.devin/config.json or project devin.json',
     docsUrl: 'https://devin.ai'
   },
@@ -75,7 +75,7 @@ export const CLIENT_INTEGRATIONS: ClientIntegrationGuide[] = [
     icon: 'Layers',
     oneClickAutoConfigAvailable: true,
     commandSnippet: '# Antigravity Workspace MCP Registry\n.mcp.json',
-    codeSnippet: '{\n  "mcpServers": {\n    /* auto-injected by TetherIQ */\n  }\n}',
+    codeSnippet: '{\n  "mcpServers": {\n    /* auto-injected by TetherMesh */\n  }\n}',
     configLocationDescription: '.mcp.json or ~/.mcp.json',
     docsUrl: 'https://antigravity.google'
   },
@@ -92,7 +92,7 @@ export const CLIENT_INTEGRATIONS: ClientIntegrationGuide[] = [
 
 client = OpenAI(
     base_url="http://127.0.0.1:4000/v1",
-    api_key="tetheriq-local-key"  # Handled locally by TetherIQ Vault
+    api_key="tethermesh-local-key"  # Handled locally by TetherMesh Vault
 )
 
 response = client.chat.completions.create(
@@ -116,7 +116,7 @@ print(response.choices[0].message.content)`,
 
 const openai = new OpenAI({
   baseURL: "http://127.0.0.1:4000/v1",
-  apiKey: "tetheriq-local-key",
+  apiKey: "tethermesh-local-key",
 });
 
 const completion = await openai.chat.completions.create({

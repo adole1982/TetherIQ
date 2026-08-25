@@ -1,16 +1,9 @@
-import React, { useState } from 'react';
-import { 
-  Clock, 
-  Download, 
-  Check, 
-  Copy, 
-  Sparkles, 
-  ShieldCheck, 
-  Zap, 
-  Layers, 
-  Terminal,
-  ExternalLink,
-  Tag
+import React from 'react';
+import {
+  Clock,
+  Sparkles,
+  ShieldCheck,
+  ExternalLink
 } from 'lucide-react';
 
 interface ChangelogPageProps {
@@ -19,81 +12,83 @@ interface ChangelogPageProps {
 }
 
 export const ChangelogPage: React.FC<ChangelogPageProps> = ({ navigate, onOpenDownload }) => {
-  const [copiedSha, setCopiedSha] = useState<string | null>(null);
-
-  const handleCopySha = (sha: string, id: string) => {
-    navigator.clipboard.writeText(sha);
-    setCopiedSha(id);
-    setTimeout(() => setCopiedSha(null), 2000);
-  };
 
   const releases = [
     {
       version: 'v1.2.0',
-      date: 'August 2026',
-      status: 'Current Stable',
-      badgeColor: 'bg-cyan-100 text-cyan-800 border-cyan-300',
+      date: 'Q1 2027 (Future Vision)',
+      status: 'Planned',
+      badgeColor: 'bg-slate-100 text-slate-700 border-slate-300',
       highlights: [
         {
-          title: '1-Click Multi-Client MCP Auto-Sync',
-          desc: 'Simultaneous non-destructive JSON injection across Cursor (~/.cursor/mcp.json), Claude Code (~/.claude.json), Windsurf, and Devin with automated timestamped .bak backups.'
+          title: 'Native OS Keychain / Credential Vault',
+          desc: 'Encrypted storage integration for master provider API keys via macOS Keychain and Windows Credential Manager.'
         },
         {
-          title: 'Enterprise Verified MCP Schemas',
-          desc: 'Pre-validated connectors for Databricks Genie, Snowflake Analytics, Supabase, GitHub, Slack, and PostgreSQL.'
+          title: 'Live Streaming Token Visualization',
+          desc: 'Real-time SSE token stream monitoring and per-request latency analytics in a lightweight HUD.'
         },
         {
-          title: 'Real-Time Spend Dials & Hard Circuit Breaker',
-          desc: 'Visual daily/monthly budget dials that cut off runaway recursive agent loops with HTTP 402 responses.'
+          title: 'Air-Gapped Offline Local Mesh',
+          desc: 'Enhanced discovery and auto-configuration for offline local LLMs (Ollama, LM Studio, and vLLM).'
         },
         {
-          title: 'Live Telemetry HUD & Latency Breakdown',
-          desc: 'Microsecond latency tracking, token velocity counters, and active connected agent monitoring in a dark-mode dashboard.'
+          title: 'Expanded MCP Catalog (50+ Tools)',
+          desc: 'Pre-validated configuration schemas for additional database, search, and productivity tool connectors.'
         }
-      ],
-      sha: 'a8f9c0e1b2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9'
+      ]
     },
     {
       version: 'v1.1.0',
-      date: 'July 2026',
-      status: 'Previous',
+      date: 'November 2026 (Planned)',
+      status: 'Post-Launch',
       badgeColor: 'bg-slate-100 text-slate-700 border-slate-300',
       highlights: [
         {
-          title: 'Multi-Tier Model Routing Matrix',
-          desc: 'Automatic cascading failover priority chains (Anthropic Claude 3.7 -> AWS Bedrock -> Groq -> Ollama) to eliminate 429 rate limit outages.'
+          title: 'Hybrid Billing Support',
+          desc: 'Track monthly subscription allowances (e.g. Claude Pro, Google AI Studio) alongside pay-per-token overage thresholds.'
         },
         {
-          title: 'OpenTelemetry Trace Waterfall Inspector',
-          desc: 'Deep observability drawer visualizing agent tool execution spans and token consumption per tool call.'
+          title: 'Active Provider Health Probing',
+          desc: 'Automated background ping checks (every 60s) to detect provider outages and measure real upstream latency.'
         },
         {
-          title: '1-Click Sensitive Key Redaction',
-          desc: 'Automatic log sanitization stripping bearer tokens and API keys (sk-ant-***, ghp_***) for safe GitHub issue reporting.'
+          title: 'Request Tracing & Inspector Drawer',
+          desc: 'Inspect in-flight agent prompts, payloads, and tool execution spans directly in a side drawer.'
+        },
+        {
+          title: '1-Click Sanitized Debug Export',
+          desc: 'Export sanitized diagnostic logs with sensitive API keys (sk-ant-***, ghp_***) automatically redacted.'
         }
-      ],
-      sha: 'b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2'
+      ]
     },
     {
       version: 'v1.0.0',
-      date: 'June 2026',
+      date: 'October 2026 (Planned)',
       status: 'Initial Launch',
-      badgeColor: 'bg-slate-100 text-slate-700 border-slate-300',
+      badgeColor: 'bg-cyan-100 text-cyan-800 border-cyan-300',
       highlights: [
         {
-          title: 'Initial Public Desktop Control Plane',
-          desc: 'Native desktop application built on Tauri/Rust with embedded Fastify proxy engine on 127.0.0.1:4000.'
+          title: 'Local Control Plane & Proxy Gateway',
+          desc: 'Zero-config local proxy on 127.0.0.1:4000 supporting OpenAI (/v1/chat/completions) and Anthropic (/v1/messages) protocols.'
         },
         {
-          title: 'LiteLLM Gateway Core Integration',
-          desc: 'Full OpenAI (/v1/chat/completions) and Anthropic (/v1/messages) protocol translation for autonomous coding agents.'
+          title: 'Hard Spend Circuit Breakers',
+          desc: 'Visual daily and monthly budget caps that automatically halt runaway agent loops with HTTP 402 cutoffs.'
+        },
+        {
+          title: '1-Click Multi-IDE MCP Tool Sync',
+          desc: 'Automated non-destructive JSON configuration injection for Cursor, Claude Code, and Windsurf with automated .bak backups.'
+        },
+        {
+          title: 'Virtual Model Aliases & LiteLLM Core',
+          desc: 'Define simple aliases like fast-code and heavy-reasoning mapped to your preferred upstream providers.'
         },
         {
           title: 'Integrated Execution Terminal',
-          desc: 'Embedded terminal drawer (Xterm.js) pre-loaded with local proxy gateway environment variables.'
+          desc: 'Embedded terminal drawer pre-loaded with local proxy gateway environment variables.'
         }
-      ],
-      sha: 'c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4'
+      ]
     }
   ];
 
@@ -108,23 +103,23 @@ export const ChangelogPage: React.FC<ChangelogPageProps> = ({ navigate, onOpenDo
           </div>
 
           <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight leading-tight mb-6">
-            Release Changelog & Downloads
+            Release Roadmap & Planned Features
           </h1>
 
           <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto mb-8">
-            Stay up-to-date with new model failover adapters, verified MCP tools, spend circuit breakers, and telemetry updates.
+            TetherMesh is launching October 2026. Below is our planned feature roadmap showing what we're building for the initial release and beyond.
           </p>
 
           <div className="flex items-center justify-center space-x-4 text-xs font-mono text-slate-500">
-            <span>Latest: v1.2.0</span>
+            <span>Launch Target: October 2026</span>
             <span>•</span>
-            <a 
-              href="https://github.com/alexd/TetherMesh/releases" 
-              target="_blank" 
+            <a
+              href="https://github.com/adole1982/TetherIQ"
+              target="_blank"
               rel="noreferrer"
               className="text-cyan-700 hover:text-cyan-800 font-semibold flex items-center gap-1"
             >
-              <span>GitHub Release Feed</span>
+              <span>View on GitHub</span>
               <ExternalLink className="w-3 h-3" />
             </a>
           </div>
@@ -150,20 +145,15 @@ export const ChangelogPage: React.FC<ChangelogPageProps> = ({ navigate, onOpenDo
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => handleCopySha(rel.sha, rel.version)}
-                    className="px-2.5 py-1 rounded-lg text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-xs font-mono flex items-center gap-1 transition-all"
-                  >
-                    {copiedSha === rel.version ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
-                    <span>{copiedSha === rel.version ? 'Copied SHA' : 'SHA-256'}</span>
-                  </button>
-                  <button
-                    onClick={onOpenDownload}
-                    className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs flex items-center gap-1.5 transition-all shadow-xs"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Download {rel.version}</span>
-                  </button>
+                  {rel.status === 'Initial Launch' && (
+                    <button
+                      onClick={onOpenDownload}
+                      className="px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs flex items-center gap-1.5 transition-all shadow-xs"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Join Waitlist</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -189,18 +179,18 @@ export const ChangelogPage: React.FC<ChangelogPageProps> = ({ navigate, onOpenDo
             </div>
           ))}
 
-          {/* Verification Box */}
-          <div className="p-6 rounded-2xl bg-slate-950 text-white border border-slate-800 space-y-3 font-mono text-xs shadow-xl">
+          {/* Open Source Commitment Box */}
+          <div className="p-6 rounded-2xl bg-slate-950 text-white border border-slate-800 space-y-3 shadow-xl">
             <div className="flex items-center space-x-2 text-cyan-400 font-bold uppercase tracking-wider text-[10px]">
               <ShieldCheck className="w-4 h-4" />
-              <span>Release Cryptographic Verification</span>
+              <span>Open-Source & Transparency Commitment</span>
             </div>
-            <p className="text-slate-300 font-sans text-xs">
-              Verify your downloaded binary checksum using standard terminal commands:
+            <p className="text-slate-300 text-sm leading-relaxed">
+              TetherMesh is built as an open-source project. All application code, proxy routing logic, and release builds are developed transparently on GitHub.
             </p>
-            <div className="p-3 rounded-lg bg-slate-900 text-cyan-300 border border-slate-800 select-all">
-              shasum -a 256 TetherIQ-1.2.0-universal.dmg
-            </div>
+            <p className="text-slate-400 text-xs">
+              100% Open-Source • Local-First • Zero Cloud Telemetry • No Account Required
+            </p>
           </div>
         </div>
       </section>

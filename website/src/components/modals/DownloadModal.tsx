@@ -1,15 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  Download, 
-  Check, 
-  Copy, 
-  Apple, 
-  Terminal, 
-  ShieldCheck, 
-  Laptop, 
+import React, { useState } from 'react';
+import {
+  X,
+  Check,
+  Apple,
+  Terminal,
+  ShieldCheck,
+  Laptop,
   Sparkles,
-  ExternalLink
+  Mail,
+  Calendar
 } from 'lucide-react';
 
 interface DownloadModalProps {
@@ -18,38 +17,45 @@ interface DownloadModalProps {
 }
 
 export const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, onClose }) => {
-  const [copiedSha, setCopiedSha] = useState<string | null>(null);
-  const [copiedCmd, setCopiedCmd] = useState(false);
-  const [detectedOS, setDetectedOS] = useState<'mac' | 'windows' | 'linux'>('mac');
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const userAgent = window.navigator.userAgent.toLowerCase();
-      if (userAgent.includes('win')) {
-        setDetectedOS('windows');
-      } else if (userAgent.includes('linux')) {
-        setDetectedOS('linux');
-      } else {
-        setDetectedOS('mac');
-      }
-    }
-  }, []);
+  const [email, setEmail] = useState('');
+  const [submitted, setSubmitted] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleCopySha = (sha: string, id: string) => {
-    navigator.clipboard.writeText(sha);
-    setCopiedSha(id);
-    setTimeout(() => setCopiedSha(null), 2000);
-  };
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-  const handleCopyCmd = (cmd: string) => {
-    navigator.clipboard.writeText(cmd);
-    setCopiedCmd(true);
-    setTimeout(() => setCopiedCmd(false), 2000);
-  };
+    try {
+      // Submit to Formspree
+      const response = await fetch('https://formspree.io/f/xkokwrvn', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email,
+          source: 'TetherMesh Waitlist',
+          _subject: 'New TetherMesh Waitlist Signup',
+        }),
+      });
 
-  const curlCmd = 'curl -fsSL https://tethermesh.dev/install.sh | bash';
+      if (response.ok) {
+        setSubmitted(true);
+        // Keep success message visible for 3 seconds, then close
+        setTimeout(() => {
+          setEmail('');
+          setSubmitted(false);
+          onClose();
+        }, 3000);
+      } else {
+        console.error('Form submission failed');
+        // You could add error handling UI here
+      }
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      // You could add error handling UI here
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-200">
@@ -60,24 +66,24 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, onClose })
         {/* Modal Header */}
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center space-x-3">
-            <img 
-              src="/brand/generated/tethermesh-emblem.png" 
-              alt="TetherMesh Emblem" 
+            <img
+              src="/brand/generated/tethermesh-emblem.png"
+              alt="TetherMesh Emblem"
               className="w-7 h-7 object-contain"
             />
             <div>
               <h3 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                Download TetherMesh Desktop
-                <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 font-semibold border border-cyan-200">
-                  v1.2.0 Stable
+                Join the Waitlist
+                <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 font-semibold border border-yellow-200">
+                  Oct 2026
                 </span>
               </h3>
               <p className="text-xs text-slate-500">
-                Zero-config local control plane & proxy gateway (127.0.0.1:4000)
+                Be the first to know when TetherMesh launches
               </p>
             </div>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
           >
@@ -86,178 +92,95 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, onClose })
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 space-y-6 overflow-y-auto">
-          {/* Quick Terminal Install */}
-          <div className="bg-slate-900 rounded-xl p-4 text-white shadow-inner">
-            <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-              <span className="font-mono flex items-center gap-1.5">
-                <Terminal className="w-3.5 h-3.5 text-cyan-400" />
-                Quickstart via Terminal (macOS / Linux)
-              </span>
+        <div className="p-8 space-y-6">
+          {/* Hero Icon */}
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 mb-4">
+              <Sparkles className="w-8 h-8 text-white" />
+            </div>
+            <h3 className="text-2xl font-bold text-slate-900 mb-2">
+              Get Early Access
+            </h3>
+            <p className="text-slate-600 max-w-md mx-auto">
+              TetherMesh is launching in October 2026. Join the waitlist to be notified when we launch and get exclusive early access to the zero-config local control plane.
+            </p>
+          </div>
+
+          {/* Waitlist Form */}
+          {!submitted ? (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                    className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-slate-900 placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+
               <button
-                onClick={() => handleCopyCmd(curlCmd)}
-                className="flex items-center gap-1 text-slate-300 hover:text-white transition-colors"
+                type="submit"
+                className="w-full px-6 py-3 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold shadow-md hover:shadow-lg transition-all flex items-center justify-center space-x-2"
               >
-                {copiedCmd ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedCmd ? 'Copied' : 'Copy'}</span>
+                <Calendar className="w-4 h-4" />
+                <span>Notify Me at Launch</span>
               </button>
-            </div>
-            <code className="text-sm font-mono text-cyan-300 block bg-slate-950/70 p-2.5 rounded-lg select-all border border-slate-800">
-              {curlCmd}
-            </code>
-          </div>
 
-          {/* OS Download Cards */}
-          <div className="space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Native Installers by Operating System
+              <p className="text-xs text-center text-slate-500">
+                We'll only email you when TetherMesh launches. No spam, unsubscribe anytime.
+              </p>
+            </form>
+          ) : (
+            <div className="text-center py-8">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 mb-4">
+                <Check className="w-8 h-8 text-emerald-600" />
+              </div>
+              <h4 className="text-xl font-bold text-slate-900 mb-2">You're on the list!</h4>
+              <p className="text-slate-600">
+                We'll notify you at <strong>{email}</strong> when TetherMesh launches in October 2026.
+              </p>
+            </div>
+          )}
+
+          {/* Planned Platforms */}
+          <div className="border-t border-slate-200 pt-6">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4 text-center">
+              Planned Platform Support
             </h4>
-
-            {/* macOS Card */}
-            <div className={`p-4 rounded-xl border transition-all ${
-              detectedOS === 'mac' ? 'border-cyan-500 bg-cyan-50/20 ring-1 ring-cyan-400' : 'border-slate-200 bg-white hover:border-slate-300'
-            }`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-800">
-                    <Apple className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-900 text-sm">macOS Installer (.dmg)</span>
-                      {detectedOS === 'mac' && (
-                        <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-cyan-100 text-cyan-800">
-                          Detected OS
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500">Universal Binary (Apple Silicon M1/M2/M3/M4 & Intel Core)</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button 
-                    onClick={() => handleCopySha('a8f9c0e1b2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9', 'mac')}
-                    title="Copy SHA-256"
-                    className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all text-xs flex items-center gap-1"
-                  >
-                    {copiedSha === 'mac' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span className="font-mono text-[10px]">SHA-256</span>
-                  </button>
-                  <a
-                    href="https://github.com/adole1982/TetherMesh/releases/latest"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs flex items-center gap-1.5 shadow-sm transition-all"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Download (.dmg)</span>
-                  </a>
-                </div>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <Apple className="w-6 h-6 mx-auto mb-2 text-slate-700" />
+                <p className="text-sm font-semibold text-slate-900">macOS</p>
+                <p className="text-xs text-slate-500">M1-M4 & Intel</p>
               </div>
-            </div>
-
-            {/* Windows Card */}
-            <div className={`p-4 rounded-xl border transition-all ${
-              detectedOS === 'windows' ? 'border-cyan-500 bg-cyan-50/20 ring-1 ring-cyan-400' : 'border-slate-200 bg-white hover:border-slate-300'
-            }`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-800">
-                    <Laptop className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-900 text-sm">Windows 64-bit (.exe / MSI)</span>
-                      {detectedOS === 'windows' && (
-                        <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-cyan-100 text-cyan-800">
-                          Detected OS
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500">Windows 10, 11 (x64 / ARM64)</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button 
-                    onClick={() => handleCopySha('b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2', 'win')}
-                    title="Copy SHA-256"
-                    className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all text-xs flex items-center gap-1"
-                  >
-                    {copiedSha === 'win' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span className="font-mono text-[10px]">SHA-256</span>
-                  </button>
-                  <a
-                    href="https://github.com/adole1982/TetherMesh/releases/latest"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs flex items-center gap-1.5 shadow-sm transition-all"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Download (.exe)</span>
-                  </a>
-                </div>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <Laptop className="w-6 h-6 mx-auto mb-2 text-slate-700" />
+                <p className="text-sm font-semibold text-slate-900">Windows</p>
+                <p className="text-xs text-slate-500">10 & 11 (x64)</p>
               </div>
-            </div>
-
-            {/* Linux Card */}
-            <div className={`p-4 rounded-xl border transition-all ${
-              detectedOS === 'linux' ? 'border-cyan-500 bg-cyan-50/20 ring-1 ring-cyan-400' : 'border-slate-200 bg-white hover:border-slate-300'
-            }`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-800">
-                    <Terminal className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-900 text-sm">Linux AppImage / .deb</span>
-                      {detectedOS === 'linux' && (
-                        <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-cyan-100 text-cyan-800">
-                          Detected OS
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500">Ubuntu, Debian, Fedora, Arch Linux (x86_64)</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button 
-                    onClick={() => handleCopySha('c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4', 'linux')}
-                    title="Copy SHA-256"
-                    className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all text-xs flex items-center gap-1"
-                  >
-                    {copiedSha === 'linux' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span className="font-mono text-[10px]">SHA-256</span>
-                  </button>
-                  <a
-                    href="https://github.com/adole1982/TetherMesh/releases/latest"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs flex items-center gap-1.5 shadow-sm transition-all"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Download (.AppImage)</span>
-                  </a>
-                </div>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <Terminal className="w-6 h-6 mx-auto mb-2 text-slate-700" />
+                <p className="text-sm font-semibold text-slate-900">Linux</p>
+                <p className="text-xs text-slate-500">AppImage/.deb</p>
               </div>
             </div>
           </div>
 
-          {/* Security & Cryptographic Guarantee */}
-          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-600 gap-2">
-            <div className="flex items-center space-x-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>100% Open-Source Binary • Verified SHA-256 Hashes • Zero Cloud Telemetry</span>
-            </div>
-            <a 
-              href="https://github.com/alexd/TetherIQ" 
-              target="_blank" 
-              rel="noreferrer"
-              className="text-cyan-700 hover:text-cyan-800 font-medium flex items-center gap-1 shrink-0"
-            >
-              <span>Inspect Source on GitHub</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
+          {/* Security Note */}
+          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start space-x-2 text-xs text-emerald-900">
+            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <span>
+              100% Open-Source • Local-First Architecture • Zero Cloud Telemetry • No Account Required
+            </span>
           </div>
         </div>
       </div>

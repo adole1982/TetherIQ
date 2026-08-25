@@ -33,6 +33,7 @@ export function App() {
     setCurrentRoute(route);
     if (typeof window !== 'undefined') {
       window.history.pushState({}, '', route);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 

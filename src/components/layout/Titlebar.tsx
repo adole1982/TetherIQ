@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  Zap, 
+  Network, 
   ShieldAlert, 
   Terminal, 
   Sparkles, 
@@ -31,11 +31,11 @@ export const Titlebar: React.FC = () => {
       {/* Brand & Gateway Status */}
       <div className="flex items-center space-x-3">
         <div className="flex items-center space-x-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-            <Zap className="w-4 h-4 text-white fill-white" />
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 via-teal-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/25 border border-cyan-400/30">
+            <Network className="w-4 h-4 text-white" />
           </div>
           <span className="font-bold tracking-tight text-white text-base">
-            Tether<span className="text-cyan-400">IQ</span>
+            Tether<span className="text-cyan-400">Mesh</span>
           </span>
         </div>
 

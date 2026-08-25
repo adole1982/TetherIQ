@@ -1,7 +1,5 @@
 import React from 'react';
 import { 
-  Github, 
-  Twitter, 
   ShieldCheck, 
   Terminal, 
   Layers, 
@@ -11,6 +9,7 @@ import {
   Sparkles,
   Zap
 } from 'lucide-react';
+import { Github, Twitter } from '../icons/BrandIcons';
 
 interface FooterProps {
   navigate: (route: string) => void;
@@ -42,7 +41,7 @@ export const Footer: React.FC<FooterProps> = ({ navigate, onOpenDownload }) => {
 
             <p className="text-sm text-slate-400 max-w-sm leading-relaxed">
               The zero-config local desktop control plane and proxy gateway for autonomous AI coding agents. 
-              Eliminate runaway spend, avoid 429 rate limit outages, and sync 50+ verified MCP servers in one click.
+              Eliminate runaway spend, avoid 429 rate limit outages, and sync verified MCP servers in one click.
             </p>
 
             <div className="flex items-center space-x-2 pt-2">
@@ -65,7 +64,7 @@ export const Footer: React.FC<FooterProps> = ({ navigate, onOpenDownload }) => {
               <li>
                 <button onClick={() => navigate('/mcp')} className="hover:text-white transition-colors flex items-center gap-1.5">
                   <span>MCP Marketplace</span>
-                  <span className="text-[10px] px-1.5 py-0.2 bg-cyan-900/80 text-cyan-300 font-bold rounded">50+</span>
+                  <span className="text-[10px] px-1.5 py-0.2 bg-cyan-900/80 text-cyan-300 font-bold rounded">50+ Planned</span>
                 </button>
               </li>
               <li>
@@ -75,7 +74,7 @@ export const Footer: React.FC<FooterProps> = ({ navigate, onOpenDownload }) => {
               </li>
               <li>
                 <button onClick={onOpenDownload} className="hover:text-white transition-colors text-cyan-400 font-medium">
-                  Download Desktop App
+                  Join Waitlist (Oct 2026)
                 </button>
               </li>
             </ul>
@@ -121,33 +120,13 @@ export const Footer: React.FC<FooterProps> = ({ navigate, onOpenDownload }) => {
             <ul className="space-y-2 text-sm">
               <li>
                 <a 
-                  href="https://github.com/alexd/TetherIQ" 
+                  href="https://github.com/adole1982/TetherIQ" 
                   target="_blank" 
                   rel="noreferrer"
-                  className="hover:text-white transition-colors flex items-center gap-1.5"
+                  className="text-sm text-slate-400 hover:text-cyan-400 transition-colors flex items-center gap-1.5"
                 >
                   <Github className="w-4 h-4" />
                   <span>GitHub Repository</span>
-                </a>
-              </li>
-              <li>
-                <a 
-                  href="https://github.com/alexd/TetherIQ/issues" 
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="hover:text-white transition-colors"
-                >
-                  Report an Issue
-                </a>
-              </li>
-              <li>
-                <a 
-                  href="https://github.com/alexd/TetherIQ/blob/main/LICENSE" 
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="hover:text-white transition-colors"
-                >
-                  Apache 2.0 / MIT License
                 </a>
               </li>
             </ul>
@@ -160,7 +139,7 @@ export const Footer: React.FC<FooterProps> = ({ navigate, onOpenDownload }) => {
           <div className="flex items-center space-x-4">
             <span className="flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Verified SHA-256 Checksums</span>
+              <span>100% Open Source</span>
             </span>
             <span>•</span>
             <span>Zero Cloud Telemetry</span>

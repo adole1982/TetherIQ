@@ -7,10 +7,13 @@ export type ProviderId =
   | 'ollama'
   | 'mistral';
 
+export type BillingMode = 'pay-per-token' | 'subscription-unlimited';
+
 export interface ProviderConfig {
   id: ProviderId;
   name: string;
   isEnabled: boolean;
+  billingMode?: BillingMode; // Default: 'pay-per-token'
   apiKey?: string;
   baseUrl?: string;
   awsRegion?: string;

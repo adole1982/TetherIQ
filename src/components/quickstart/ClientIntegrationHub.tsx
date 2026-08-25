@@ -12,7 +12,8 @@ import {
   Check, 
   ExternalLink,
   Zap,
-  Sparkles
+  Sparkles,
+  Network
 } from 'lucide-react';
 import { CLIENT_INTEGRATIONS, ClientIntegrationGuide } from '../../data/clientIntegrations';
 import { useTetherStore } from '../../store/useTetherStore';
@@ -48,7 +49,7 @@ export const ClientIntegrationHub: React.FC = () => {
       case 'Layers': return <Layers className="w-5 h-5 text-amber-400" />;
       case 'FileCode': return <FileCode className="w-5 h-5 text-rose-400" />;
       case 'Cpu': return <Cpu className="w-5 h-5 text-teal-400" />;
-      default: return <Zap className="w-5 h-5 text-cyan-400" />;
+      default: return <Network className="w-5 h-5 text-cyan-400" />;
     }
   };
 
@@ -61,7 +62,7 @@ export const ClientIntegrationHub: React.FC = () => {
             <Sparkles className="w-4 h-4 text-cyan-400" />
             <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Zero-Config Gateway Connectors</span>
           </div>
-          <h1 className="text-xl font-extrabold text-white tracking-tight">Connect AI Agents to TetherIQ</h1>
+          <h1 className="text-xl font-extrabold text-white tracking-tight">Connect AI Agents to TetherMesh</h1>
           <p className="text-xs text-slate-400 leading-relaxed">
             Redirect any coding agent CLI, IDE, or autonomous script to the local proxy (<code className="text-cyan-300 font-mono">127.0.0.1:4000</code>) for automatic model failover, MCP tool bridging, and runaway spend protection.
           </p>

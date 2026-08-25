@@ -1,6 +1,7 @@
 import React from 'react';
-import { X, Key, Check, ShieldCheck, ExternalLink, Zap } from 'lucide-react';
+import { X, Key, Check, ShieldCheck, ExternalLink, Zap, DollarSign } from 'lucide-react';
 import { useTetherStore } from '../../store/useTetherStore';
+import { BillingMode } from '../../types/routing';
 
 export const KeyManagerModal: React.FC = () => {
   const { isKeyManagerOpen, setKeyManagerOpen, providers, updateProvider } = useTetherStore();
@@ -50,6 +51,27 @@ export const KeyManagerModal: React.FC = () => {
                     className="rounded bg-slate-900 border-slate-700 text-cyan-500 focus:ring-cyan-500"
                   />
                 </label>
+              </div>
+
+              {/* Billing Mode Selector */}
+              <div className="pt-2 border-t border-slate-800/50">
+                <label className="text-[11px] text-slate-400 flex items-center space-x-1.5 mb-1.5">
+                  <DollarSign className="w-3 h-3 text-amber-400" />
+                  <span>Billing Mode</span>
+                </label>
+                <select
+                  value={p.billingMode || 'pay-per-token'}
+                  onChange={(e) => updateProvider(p.id, { billingMode: e.target.value as BillingMode })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
+                >
+                  <option value="pay-per-token">Pay-per-token (enforce budget caps)</option>
+                  <option value="subscription-unlimited">Subscription (unlimited, no cost tracking)</option>
+                </select>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  {(p.billingMode || 'pay-per-token') === 'pay-per-token'
+                    ? 'Circuit breaker trips when budget exceeded. Best for AWS, OpenAI pay-as-you-go.'
+                    : 'No dollar tracking or circuit breaker. Use for Claude Pro, Google AI Studio Pro, etc.'}
+                </p>
               </div>
 
               {p.id === 'bedrock' ? (

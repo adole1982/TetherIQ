@@ -1,20 +1,21 @@
 import React, { useState } from 'react';
-import { 
-  BookOpen, 
-  Terminal, 
-  Copy, 
-  Check, 
-  ShieldCheck, 
-  Layers, 
-  Sliders, 
-  ExternalLink, 
-  Key, 
-  ChevronRight, 
-  CheckCircle2, 
+import {
+  BookOpen,
+  Terminal,
+  Copy,
+  Check,
+  ShieldCheck,
+  Layers,
+  Sliders,
+  ExternalLink,
+  Key,
+  ChevronRight,
+  CheckCircle2,
   Sparkles,
   Lock,
   Cpu
 } from 'lucide-react';
+import { Github } from '../components/icons/BrandIcons';
 
 interface DocsPageProps {
   navigate: (route: string) => void;
@@ -60,9 +61,9 @@ export const DocsPage: React.FC<DocsPageProps> = ({ navigate, onOpenDownload }) 
       ]
     },
     {
-      title: 'SECURITY & VAULT',
+      title: 'SECURITY & PRIVACY',
       items: [
-        { id: 'keychain', label: 'OS Keychain Encryption' },
+        { id: 'keychain', label: 'Local Key Storage & Privacy' },
         { id: 'sanitizer', label: 'Sanitized Log Export' },
       ]
     }
@@ -166,7 +167,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ navigate, onOpenDownload }) 
               <div className="p-3.5 rounded-xl bg-cyan-50/70 border border-cyan-200 flex items-start space-x-2 text-xs text-cyan-900">
                 <Lock className="w-4 h-4 text-cyan-700 shrink-0 mt-0.5" />
                 <span>
-                  <strong>Security Note:</strong> Master provider API keys (Anthropic, OpenAI, AWS, Groq) are stored securely in your operating system's native encrypted vault (macOS Keychain, Windows Credential Manager). MCP tool configs are synchronized locally to your editor JSON files with automated <code className="bg-cyan-100/80 px-1 py-0.5 rounded font-mono text-[11px]">.bak</code> backups.
+                  <strong>Security Note:</strong> Master provider API keys (Anthropic, OpenAI, AWS, Groq) stay strictly on your local machine and are never transmitted to external cloud servers. MCP tool configs are synchronized locally to your editor JSON files with automated <code className="bg-cyan-100/80 px-1 py-0.5 rounded font-mono text-[11px]">.bak</code> backups.
                 </span>
               </div>
             </div>
@@ -256,7 +257,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ navigate, onOpenDownload }) 
                     <br />
                     &nbsp;&nbsp;base_url=<span className="text-emerald-300">"http://127.0.0.1:4000/v1"</span>,
                     <br />
-                    &nbsp;&nbsp;api_key=<span className="text-emerald-300">"tetheriq-local"</span>
+                    &nbsp;&nbsp;api_key=<span className="text-emerald-300">"tethermesh-local"</span>
                     <br />
                     )
                   </pre>
@@ -274,7 +275,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ navigate, onOpenDownload }) 
                     Configure Failover Priority
                   </h4>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    Set up cascading model routes (Claude $\rightarrow$ Bedrock $\rightarrow$ Groq) to ensure zero downtime on 429 errors.
+                    Set up cascading model routes (Claude → Bedrock → Groq) to ensure zero downtime on 429 errors.
                   </p>
                 </div>
 
@@ -313,19 +314,19 @@ export const DocsPage: React.FC<DocsPageProps> = ({ navigate, onOpenDownload }) 
 
             <div className="pt-6 border-t border-slate-100 space-y-3 text-xs">
               <a 
-                href="https://github.com/alexd/TetherIQ" 
+                href="https://github.com/adole1982/TetherIQ" 
                 target="_blank" 
                 rel="noreferrer"
-                className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 transition-colors"
+                className="px-4 py-2 rounded-lg bg-slate-900 text-slate-100 hover:bg-slate-800 text-sm font-semibold transition-all inline-flex items-center gap-2"
               >
-                <span>Edit this page on GitHub</span>
-                <ExternalLink className="w-3 h-3 text-slate-400" />
+                <Github className="w-4 h-4" />
+                <span>View on GitHub</span>
               </a>
-              <button 
+              <button
                 onClick={onOpenDownload}
-                className="w-full py-2 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs text-left"
+                className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-semibold transition-all"
               >
-                Download TetherIQ Desktop →
+                Join Waitlist →
               </button>
             </div>
           </aside>

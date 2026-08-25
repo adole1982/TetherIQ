@@ -39,7 +39,7 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
       description: 'Natural language queries against Unity Catalog, run lakehouse analytics, and discover table schemas.',
       envVars: ['DATABRICKS_HOST', 'DATABRICKS_TOKEN', 'DATABRICKS_HTTP_PATH'],
       verified: true,
-      downloads: '14.2k',
+      downloads: 'Planned',
       badge: 'Enterprise'
     },
     {
@@ -49,7 +49,7 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
       description: 'Execute warehouse queries, discover tables, and manage warehouse schemas via secure SQL connector.',
       envVars: ['SNOWFLAKE_ACCOUNT', 'SNOWFLAKE_USER', 'SNOWFLAKE_PASSWORD'],
       verified: true,
-      downloads: '12.8k',
+      downloads: 'Planned',
       badge: 'Enterprise'
     },
     {
@@ -59,7 +59,7 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
       description: 'Run SQL migrations, inspect database schemas, manage auth policies, and query Postgres.',
       envVars: ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'],
       verified: true,
-      downloads: '18.9k',
+      downloads: 'Planned',
       badge: 'Popular'
     },
     {
@@ -69,7 +69,7 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
       description: 'Full database introspection, query execution, and semantic vector similarity search via pgvector.',
       envVars: ['POSTGRES_CONNECTION_STRING'],
       verified: true,
-      downloads: '22.1k',
+      downloads: 'Planned',
       badge: 'Essential'
     },
     {
@@ -79,7 +79,7 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
       description: 'Automate PR reviews, inspect diffs, search repositories, create issues, and manage CI/CD runs.',
       envVars: ['GITHUB_PERSONAL_ACCESS_TOKEN'],
       verified: true,
-      downloads: '31.4k',
+      downloads: 'Planned',
       badge: 'Essential'
     },
     {
@@ -89,7 +89,7 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
       description: 'Read thread replies, post automated incident updates, and notify engineering channels.',
       envVars: ['SLACK_BOT_TOKEN'],
       verified: true,
-      downloads: '15.6k',
+      downloads: 'Planned',
       badge: 'Popular'
     },
     {
@@ -99,7 +99,7 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
       description: 'Privacy-focused web search, document retrieval, and up-to-date real-time context fetching for agents.',
       envVars: ['BRAVE_SEARCH_API_KEY'],
       verified: true,
-      downloads: '19.4k',
+      downloads: 'Planned',
       badge: 'Popular'
     },
     {
@@ -109,7 +109,7 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
       description: 'Manage local containers, inspect container logs, build images, and orchestrate dev environments.',
       envVars: ['DOCKER_HOST'],
       verified: true,
-      downloads: '16.7k',
+      downloads: 'Planned',
       badge: 'DevOps'
     },
     {
@@ -119,7 +119,7 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
       description: 'Create sprint tickets, update issue statuses, query sprint backlogs, and sync requirements.',
       envVars: ['JIRA_INSTANCE_URL', 'JIRA_API_TOKEN'],
       verified: true,
-      downloads: '9.8k',
+      downloads: 'Planned',
       badge: 'Enterprise'
     },
     {
@@ -129,7 +129,7 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
       description: 'Fetch real-time stack traces, search production issues, and auto-diagnose crash events.',
       envVars: ['SENTRY_AUTH_TOKEN', 'SENTRY_ORG'],
       verified: true,
-      downloads: '11.3k',
+      downloads: 'Planned',
       badge: 'DevOps'
     },
     {
@@ -139,7 +139,7 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
       description: 'Read project documentation, update product requirements, and append agent summaries to pages.',
       envVars: ['NOTION_API_KEY'],
       verified: true,
-      downloads: '13.5k',
+      downloads: 'Planned',
       badge: 'Productivity'
     },
     {
@@ -149,7 +149,7 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
       description: 'High-speed semantic search, vector upserts, and index management for RAG pipelines.',
       envVars: ['PINECONE_API_KEY', 'PINECONE_ENVIRONMENT'],
       verified: true,
-      downloads: '14.1k',
+      downloads: 'Planned',
       badge: 'AI/RAG'
     }
   ];
@@ -170,7 +170,7 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-cyan-50 border border-cyan-200 text-xs font-semibold text-cyan-800 mb-6">
             <Layers className="w-4 h-4 text-cyan-600" />
-            <span>50+ Official & Verified Connectors</span>
+            <span>50+ Planned Integrations for Launch</span>
           </div>
 
           <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight leading-tight mb-6">
@@ -188,7 +188,7 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
             <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search 50+ MCP tools (e.g. Databricks, Supabase, GitHub)..."
+              placeholder="Search MCP tools (e.g. Databricks, Supabase, GitHub)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-sm placeholder:text-slate-400"
@@ -310,7 +310,7 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
                     <span>Required Variables</span>
                     <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
                       <Lock className="w-3 h-3" />
-                      OS Vault Encrypted
+                      100% Local Machine
                     </span>
                   </div>
                   <div className="space-y-1.5 font-mono text-xs">
@@ -347,8 +347,8 @@ export const McpPage: React.FC<McpPageProps> = ({ navigate, onOpenDownload }) =>
                   onClick={onOpenDownload}
                   className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2"
                 >
-                  <Download className="w-4 h-4" />
-                  <span>Sync Tools with TetherIQ Desktop</span>
+                  <Sparkles className="w-4 h-4" />
+                  <span>Join Waitlist for 1-Click Sync</span>
                 </button>
               </div>
             </div>

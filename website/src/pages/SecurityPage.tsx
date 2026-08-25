@@ -36,7 +36,7 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
     },
     {
       q: 'Where are my provider API keys stored?',
-      a: 'Your master LLM provider API keys (Anthropic, OpenAI, AWS Bedrock, Google Vertex, Groq) are encrypted and stored in your operating system’s native secure vault (macOS Keychain, Windows Credential Manager, or Linux libsecret). For editor MCP tools (e.g. GitHub, Postgres), TetherMesh non-destructively syncs configurations directly to your local editor JSON files (like ~/.cursor/mcp.json) with automated timestamped .bak backups.'
+      a: 'Your master LLM provider API keys (Anthropic, OpenAI, AWS Bedrock, Google Vertex, Groq) reside strictly on your local machine (either in local memory or your own local environment variables). TetherMesh never sends your credentials or prompts to external telemetry servers. For editor MCP tools (e.g. GitHub, Postgres), configurations are synced directly to your local editor JSON files (like ~/.cursor/mcp.json) with automated timestamped .bak backups.'
     },
     {
       q: 'Can I use TetherMesh completely offline or in air-gapped environments?',
@@ -47,8 +47,8 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
       a: 'TetherMesh utilizes non-destructive JSON merging. It reads your existing ~/.cursor/mcp.json or ~/.claude.json, creates an automated timestamped backup (.bak file) in the same directory, and inserts only verified tool entries without removing custom configurations.'
     },
     {
-      q: 'How are TetherMesh binary releases verified?',
-      a: 'Every desktop build is compiled transparently via GitHub Actions with published SHA-256 cryptographic checksums. You can verify binary integrity directly on your machine before running (e.g. shasum -a 256 TetherMesh.dmg).'
+      q: 'Is TetherMesh open-source and auditable?',
+      a: 'Yes. TetherMesh is 100% open-source on GitHub. You can inspect the complete source code, build and run it locally, and audit all local traffic with standard networking tools.'
     }
   ];
 
@@ -76,7 +76,7 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
               🔒 Zero Cloud Intermediary
             </span>
             <span className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-2xs">
-              🛡️ Native OS Keychain Encryption
+              🛡️ 100% Local Key Privacy
             </span>
             <span className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-2xs">
               ⚡ Open-Source LiteLLM Core
@@ -98,25 +98,23 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
           </div>
 
           {/* Diagram Card */}
-          <div className="p-6 sm:p-8 rounded-2xl bg-slate-950 border border-slate-800 text-white shadow-2xl">
+          <div className="rounded-2xl bg-slate-950 p-6 sm:p-8 border border-slate-800 shadow-2xl">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-              {/* Box 1: Your Agents */}
+              {/* Box 1: Local Agent */}
               <div className="p-5 rounded-xl bg-slate-900/90 border border-slate-800 text-center space-y-3">
                 <div className="w-10 h-10 rounded-lg bg-cyan-950/80 border border-cyan-800 mx-auto flex items-center justify-center text-cyan-400">
                   <Terminal className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-100 text-sm">Your Agent Clients</h3>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Cursor, Claude Code CLI, Windsurf, Devin, Python SDK
-                  </p>
+                  <h3 className="font-bold text-slate-100 text-sm">Local Coding Agents</h3>
+                  <p className="text-[11px] text-slate-400 mt-1">Claude Code, Cursor, Windsurf, Devin</p>
                 </div>
                 <div className="text-[10px] font-mono text-cyan-300 bg-slate-950 p-1.5 rounded border border-slate-800">
-                  Host: 127.0.0.1:4000
+                  127.0.0.1:4000
                 </div>
               </div>
 
-              {/* Box 2: TetherMesh Local Engine */}
+              {/* Box 2: TetherMesh Gateway */}
               <div className="p-6 rounded-xl bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-cyan-500 text-center space-y-3 shadow-lg shadow-cyan-950/50 relative">
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-cyan-500 text-slate-950 font-bold text-[10px] tracking-wider uppercase">
                   100% Localhost
@@ -127,7 +125,7 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
                 <div>
                   <h3 className="font-bold text-white text-base">TetherMesh Control Plane</h3>
                   <p className="text-xs text-slate-300 mt-1">
-                    Failover Matrix • Spend Cap • MCP Sync • OS Keychain Vault
+                    Failover Matrix • Spend Cap • MCP Sync • Local Privacy
                   </p>
                 </div>
                 <div className="text-[10px] font-mono text-emerald-400 bg-slate-950/90 p-1.5 rounded border border-slate-800">
@@ -189,9 +187,9 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
               <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
                 <Key className="w-5 h-5" />
               </div>
-              <h4 className="text-lg font-bold text-slate-900">2. OS Keychain Vault for Master Keys</h4>
+              <h4 className="text-lg font-bold text-slate-900">2. Zero Cloud Key Storage</h4>
               <p className="text-sm text-slate-600 leading-relaxed">
-                Master LLM API credentials (Anthropic, OpenAI, AWS, Groq) are encrypted inside your operating system’s native security enclave (macOS Keychain, Windows Credential Manager). They are never saved as raw plaintext on disk.
+                Master LLM API credentials (Anthropic, OpenAI, AWS, Groq) reside strictly on your local machine. They are never transmitted to external cloud servers or third-party telemetry systems.
               </p>
             </div>
 
@@ -260,11 +258,11 @@ export const SecurityPage: React.FC<SecurityPageProps> = ({ navigate, onOpenDown
           {/* Verification CTA Box */}
           <div className="mt-14 p-6 rounded-2xl bg-slate-100 border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
-              <h4 className="font-bold text-slate-900 text-sm">Need a formal security assessment or audit report?</h4>
-              <p className="text-xs text-slate-600 mt-0.5">Explore our open-source routing core and verification instructions on GitHub.</p>
+              <h4 className="font-bold text-slate-900 text-sm">Want to inspect the code or contribute?</h4>
+              <p className="text-xs text-slate-600 mt-0.5">Explore our open-source codebase, architecture, and roadmap on GitHub.</p>
             </div>
             <a
-              href="https://github.com/alexd/TetherMesh"
+              href="https://github.com/adole1982/TetherIQ"
               target="_blank"
               rel="noreferrer"
               className="px-4 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs flex items-center gap-1.5 shrink-0 transition-all"

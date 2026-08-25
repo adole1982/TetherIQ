@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
-  "productName": "TetherIQ",
+  "productName": "TetherMesh",
   "version": "1.0.0",
-  "identifier": "com.tetheriq.app",
+  "identifier": "com.tethermesh.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:5173",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "TetherIQ",
+        "title": "TetherMesh",
         "width": 1280,
         "height": 840,
         "minWidth": 960,
@@ -30,6 +30,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "externalBin": [
+      "binaries/litellm-proxy"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

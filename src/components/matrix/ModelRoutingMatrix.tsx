@@ -37,17 +37,22 @@ export const ModelRoutingMatrix: React.FC = () => {
           </div>
           <h1 className="text-xl font-extrabold text-white tracking-tight">Model Routing & Failover Matrix</h1>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Configure linear and tiered priority lists. If Anthropic hits a <code className="text-amber-300 font-mono">429 Rate Limit</code>, TetherIQ automatically reroutes active agent sessions to AWS Bedrock or Groq with zero session disruption.
+            Configure linear and tiered priority lists. If Anthropic hits a <code className="text-amber-300 font-mono">429 Rate Limit</code>, TetherMesh automatically reroutes active agent sessions to AWS Bedrock or Groq with zero session disruption.
           </p>
         </div>
 
-        <button
-          onClick={() => setKeyManagerOpen(true)}
-          className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-cyan-500/40 text-xs font-semibold shadow-sm transition-all"
-        >
-          <Key className="w-4 h-4 text-amber-400" />
-          <span>Manage Provider API Keys ({providers.filter(p => p.isEnabled).length})</span>
-        </button>
+        <div className="space-y-2">
+          <button
+            onClick={() => setKeyManagerOpen(true)}
+            className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-cyan-500/40 text-xs font-semibold shadow-sm transition-all"
+          >
+            <Key className="w-4 h-4 text-amber-400" />
+            <span>Manage Provider API Keys ({providers.filter(p => p.isEnabled).length})</span>
+          </button>
+          <p className="text-[11px] text-amber-300 font-mono">
+            Keys are session-only. To persist, set env vars: <code className="text-cyan-300">AWS_ACCESS_KEY_ID</code>, <code className="text-cyan-300">OPENAI_API_KEY</code>
+          </p>
+        </div>
       </div>
 
       {/* Virtual Model Aliasing Card */}

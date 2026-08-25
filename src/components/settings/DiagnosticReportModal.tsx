@@ -94,7 +94,7 @@ export const DiagnosticReportModal: React.FC = () => {
         {/* Footer */}
         <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between">
           <a
-            href="https://github.com/alexd/tetheriq/issues/new"
+            href="https://github.com/alexd/tethermesh/issues/new"
             target="_blank"
             rel="noreferrer"
             className="text-xs text-cyan-400 hover:underline flex items-center space-x-1"

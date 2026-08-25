@@ -9,7 +9,8 @@ import {
   Copy, 
   ArrowRight,
   Zap,
-  CheckCircle2
+  CheckCircle2,
+  Network
 } from 'lucide-react';
 import { useTetherStore } from '../../store/useTetherStore';
 import { CLIENT_INTEGRATIONS } from '../../data/clientIntegrations';
@@ -34,10 +35,10 @@ export const QuickstartModal: React.FC = () => {
         <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
           <div className="flex items-center space-x-2.5">
             <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-cyan-400" />
+              <Network className="w-4 h-4 text-cyan-400" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">60-Second Setup Wizard</h2>
+              <h2 className="text-base font-bold text-white">TetherMesh 60-Second Setup Wizard</h2>
               <p className="text-xs text-slate-400">Zero-config control plane setup for autonomous AI coding agents</p>
             </div>
           </div>
@@ -85,7 +86,7 @@ export const QuickstartModal: React.FC = () => {
           {currentStep === 1 && (
             <div className="space-y-4">
               <div className="text-xs text-slate-300">
-                Enter your provider API keys. TetherIQ stores them locally in your secure vault and routes requests through <span className="font-mono text-cyan-400">127.0.0.1:4000</span>.
+                Enter your provider API keys. TetherMesh stores them locally in your secure vault and routes requests through <span className="font-mono text-cyan-400">127.0.0.1:4000</span>.
               </div>
 
               <div className="space-y-3">
@@ -129,7 +130,7 @@ export const QuickstartModal: React.FC = () => {
           {currentStep === 2 && (
             <div className="space-y-5">
               <div className="text-xs text-slate-300">
-                Protect yourself from runaway recursive loops or infinite tool loops. TetherIQ trips a hard circuit breaker (<span className="font-mono text-rose-400">HTTP 402</span>) if your budget cap is reached.
+                Protect yourself from runaway recursive loops or infinite tool loops. TetherMesh trips a hard circuit breaker (<span className="font-mono text-rose-400">HTTP 402</span>) if your budget cap is reached.
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -243,7 +244,7 @@ export const QuickstartModal: React.FC = () => {
               className="flex items-center space-x-1.5 px-5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors shadow-sm shadow-emerald-500/20"
             >
               <Zap className="w-3.5 h-3.5 fill-slate-950" />
-              <span>Launch Control Plane</span>
+              <span>Launch TetherMesh</span>
             </button>
           )}
         </div>

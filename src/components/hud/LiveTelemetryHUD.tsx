@@ -6,8 +6,9 @@ import {
   ShieldAlert, 
   TrendingUp, 
   Flame, 
-  ArrowUpRight,
-  RefreshCw
+  RefreshCw,
+  Terminal,
+  Bot
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -28,11 +29,12 @@ export const LiveTelemetryHUD: React.FC = () => {
     budget, 
     resetCircuitBreaker,
     connectedAgents,
-    traces
+    traces,
+    isProxyRunning
   } = useTetherStore();
 
-  const totalTokensToday = telemetryHistory.reduce((acc, t) => acc + t.inputTokens + t.outputTokens, 0) + 214500;
-  const budgetPercentage = Math.min(100, (budget.currentDailySpend / budget.dailyLimit) * 100);
+  const totalTokensToday = telemetryHistory.reduce((acc, t) => acc + t.inputTokens + t.outputTokens, 0);
+  const budgetPercentage = Math.min(100, budget.dailyLimit > 0 ? (budget.currentDailySpend / budget.dailyLimit) * 100 : 0);
 
   return (
     <div className="space-y-6">
@@ -138,6 +140,12 @@ export const LiveTelemetryHUD: React.FC = () => {
                 <span>Reset Circuit Breaker</span>
               </button>
             )}
+
+            {!budget.isCircuitBreakerTripped && (
+              <p className="text-[10px] text-slate-500 mt-1.5">
+                Enforced by LiteLLM Proxy • Resets at midnight UTC
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -147,43 +155,50 @@ export const LiveTelemetryHUD: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Activity className="w-4 h-4 text-cyan-400" />
-            <h2 className="text-sm font-bold text-white">Live In-Flight Telemetry (Tokens / Second Stream)</h2>
+            <h2 className="text-sm font-bold text-white">Live Token Velocity & Throughput</h2>
           </div>
           <div className="flex items-center space-x-3 text-xs">
             <span className="flex items-center space-x-1.5 text-slate-400">
-              <span className="w-2 h-2 rounded-full bg-cyan-400" />
-              <span>Token Velocity</span>
+              <span className={`w-2 h-2 rounded-full ${isProxyRunning ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+              <span className="font-mono text-[11px]">{isProxyRunning ? 'Live Stream Connected' : 'Gateway Offline'}</span>
             </span>
-            <span className="font-mono text-slate-500 text-[11px]">Sampling every 3s</span>
           </div>
         </div>
 
         <div className="h-52 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={telemetryHistory}>
-              <defs>
-                <linearGradient id="tokenVelocity" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4} />
-                  <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="timestamp" hide />
-              <YAxis domain={[0, 80]} stroke="#475569" fontSize={11} tickFormatter={(v) => `${v} t/s`} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', borderRadius: '8px', fontSize: '12px', color: '#f8fafc' }}
-                labelFormatter={() => 'Telemetry Sample'}
-                formatter={(value: any) => [`${value} tokens/sec`, 'Velocity']}
-              />
-              <Area
-                type="monotone"
-                dataKey="tokensPerSecond"
-                stroke="#06b6d4"
-                strokeWidth={2}
-                fillOpacity={1}
-                fill="url(#tokenVelocity)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+          {telemetryHistory.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={telemetryHistory}>
+                <defs>
+                  <linearGradient id="tokenVelocity" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="timestamp" hide />
+                <YAxis domain={[0, 'auto']} stroke="#475569" fontSize={11} tickFormatter={(v) => `${v} t/s`} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', borderRadius: '8px', fontSize: '12px', color: '#f8fafc' }}
+                  labelFormatter={() => 'Live Telemetry Sample'}
+                  formatter={(value: any) => [`${value} tokens/sec`, 'Velocity']}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="tokensPerSecond"
+                  stroke="#06b6d4"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#tokenVelocity)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center text-center p-6 border border-dashed border-slate-800 rounded-lg">
+              <Activity className="w-8 h-8 text-slate-600 mb-2 animate-pulse" />
+              <div className="text-xs font-semibold text-slate-400">Waiting for agent activity on 127.0.0.1:4000</div>
+              <div className="text-[11px] text-slate-500 mt-1">Send a query via Claude Code CLI, Cursor IDE, or OpenAI SDK to view live waveform</div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -193,26 +208,34 @@ export const LiveTelemetryHUD: React.FC = () => {
         <div className="p-5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-white uppercase tracking-wider">Active Client Agents ({connectedAgents.length})</h3>
-            <span className="text-[11px] text-cyan-400 font-mono">Bound to 127.0.0.1:4000</span>
+            <span className="text-[11px] text-cyan-400 font-mono">127.0.0.1:4000</span>
           </div>
 
           <div className="space-y-2">
-            {connectedAgents.map((agent) => (
-              <div key={agent.id} className="p-3 rounded-lg bg-slate-950 border border-slate-800/80 flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <div>
-                    <div className="text-xs font-bold text-white">{agent.clientName}</div>
-                    <div className="text-[11px] text-slate-500 font-mono">{agent.activeModel}</div>
+            {connectedAgents.length > 0 ? (
+              connectedAgents.map((agent) => (
+                <div key={agent.id} className="p-3 rounded-lg bg-slate-950 border border-slate-800/80 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-2 h-2 rounded-full ${agent.status === 'active' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                    <div>
+                      <div className="text-xs font-bold text-white">{agent.clientName}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">{agent.activeModel || 'Auto-routed'}</div>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-xs font-mono text-cyan-300 font-medium">{(agent.totalTokens).toLocaleString()} tok</div>
+                    <div className="text-[11px] text-slate-400 font-mono">${agent.totalCost.toFixed(4)}</div>
                   </div>
                 </div>
-
-                <div className="text-right">
-                  <div className="text-xs font-mono text-cyan-300 font-medium">{(agent.totalTokens).toLocaleString()} tok</div>
-                  <div className="text-[11px] text-slate-400 font-mono">${agent.totalCost.toFixed(2)}</div>
-                </div>
+              ))
+            ) : (
+              <div className="p-6 rounded-lg bg-slate-950/60 border border-dashed border-slate-800 text-center">
+                <Bot className="w-6 h-6 text-slate-600 mx-auto mb-1.5" />
+                <div className="text-xs text-slate-400 font-medium">No agents connected yet</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">Connecting Claude Code, Cursor, or Aider will register here automatically</div>
               </div>
-            ))}
+            )}
           </div>
         </div>
 
@@ -224,26 +247,34 @@ export const LiveTelemetryHUD: React.FC = () => {
           </div>
 
           <div className="space-y-2">
-            {traces.slice(0, 3).map((trace) => (
-              <div key={trace.id} className="p-3 rounded-lg bg-slate-950 border border-slate-800/80 flex items-center justify-between text-xs">
-                <div className="space-y-0.5">
-                  <div className="flex items-center space-x-2">
-                    <span className="font-semibold text-white">{trace.clientName}</span>
-                    <span className={`px-1.5 py-0.2 rounded text-[10px] ${
-                      trace.status === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                    }`}>
-                      {trace.status}
-                    </span>
+            {traces.length > 0 ? (
+              traces.slice(0, 3).map((trace) => (
+                <div key={trace.id} className="p-3 rounded-lg bg-slate-950 border border-slate-800/80 flex items-center justify-between text-xs">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-semibold text-white">{trace.clientName}</span>
+                      <span className={`px-1.5 py-0.2 rounded text-[10px] ${
+                        trace.status === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                      }`}>
+                        {trace.status}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-500 font-mono">{trace.modelServed}</span>
                   </div>
-                  <span className="text-[11px] text-slate-500 font-mono">{trace.modelServed}</span>
-                </div>
 
-                <div className="text-right font-mono">
-                  <div className="text-slate-300">{trace.totalDurationMs}ms</div>
-                  <div className="text-cyan-400 text-[11px]">${trace.cost.toFixed(4)}</div>
+                  <div className="text-right font-mono">
+                    <div className="text-slate-300">{trace.totalDurationMs}ms</div>
+                    <div className="text-cyan-400 text-[11px]">${trace.cost.toFixed(4)}</div>
+                  </div>
                 </div>
+              ))
+            ) : (
+              <div className="p-6 rounded-lg bg-slate-950/60 border border-dashed border-slate-800 text-center">
+                <Terminal className="w-6 h-6 text-slate-600 mx-auto mb-1.5" />
+                <div className="text-xs text-slate-400 font-medium">No traces recorded yet</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">Request execution timings and spans will stream here in real time</div>
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>

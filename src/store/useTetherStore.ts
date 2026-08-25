@@ -6,6 +6,14 @@ import { ActivityTrace } from '../types/traces';
 import { AppSettings, ClientSyncResult } from '../types/config';
 import { MCP_CATALOG } from '../data/mcpCatalogData';
 import { ConfigSyncService } from '../services/configSyncService';
+import { generateLiteLLMConfig } from '../services/litellmConfigService';
+import {
+  loadPersistedBudget,
+  savePersistedBudget,
+  fetchLiteLLMSpend,
+  persistedToStoreBudget,
+  storeBudgetToPersisted,
+} from '../services/budgetPersistence';
 
 export type NavTab = 'hud' | 'matrix' | 'tools' | 'traces' | 'agents' | 'quickstart' | 'settings';
 
@@ -28,6 +36,7 @@ interface TetherState {
   proxyPort: number;
   proxyHost: string;
   appVersion: string;
+  fetchGatewayHealth: () => Promise<void>;
 
   // Telemetry & Spend
   telemetryHistory: TelemetryPoint[];
@@ -35,8 +44,8 @@ interface TetherState {
   currentLatencyMs: number;
   currentBurnRatePerHour: number;
   budget: SpendBudget;
-  updateBudgetLimits: (daily: number, monthly: number) => void;
-  resetCircuitBreaker: () => void;
+  updateBudgetLimits: (daily: number, monthly: number) => Promise<void>;
+  resetCircuitBreaker: () => Promise<void>;
   triggerSpend: (amount: number, tokens: number) => void;
 
   // Providers & Routing Matrix
@@ -78,12 +87,12 @@ interface TetherState {
 }
 
 const INITIAL_PROVIDERS: ProviderConfig[] = [
-  { id: 'anthropic', name: 'Anthropic Direct', isEnabled: true, apiKey: 'sk-ant-api03-live-sample-tether-992384', isHealthy: true, lastPingMs: 42 },
-  { id: 'openai', name: 'OpenAI Direct', isEnabled: true, apiKey: 'sk-proj-sample-key-tether-992134', isHealthy: true, lastPingMs: 65 },
-  { id: 'bedrock', name: 'AWS Bedrock', isEnabled: true, awsRegion: 'us-east-1', awsAccessKey: 'AKIAIOSFODNN7EXAMPLE', awsSecretKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', isHealthy: true, lastPingMs: 78 },
-  { id: 'vertex', name: 'Google Vertex AI', isEnabled: true, vertexProjectId: 'gcp-prod-analytics', vertexLocation: 'us-central1', isHealthy: true, lastPingMs: 55 },
-  { id: 'groq', name: 'Groq Cloud', isEnabled: true, apiKey: 'gsk_sample_live_key_9934', isHealthy: true, lastPingMs: 18 },
-  { id: 'ollama', name: 'Local Ollama (11434)', isEnabled: true, baseUrl: 'http://localhost:11434', isHealthy: true, lastPingMs: 4 }
+  { id: 'anthropic', name: 'Anthropic Direct', isEnabled: true, billingMode: 'pay-per-token', apiKey: 'sk-ant-api03-live-sample-tether-992384', isHealthy: true, lastPingMs: 42 },
+  { id: 'openai', name: 'OpenAI Direct', isEnabled: true, billingMode: 'pay-per-token', apiKey: 'sk-proj-sample-key-tether-992134', isHealthy: true, lastPingMs: 65 },
+  { id: 'bedrock', name: 'AWS Bedrock', isEnabled: true, billingMode: 'pay-per-token', awsRegion: 'us-east-1', awsAccessKey: 'AKIAIOSFODNN7EXAMPLE', awsSecretKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', isHealthy: true, lastPingMs: 78 },
+  { id: 'vertex', name: 'Google Vertex AI', isEnabled: true, billingMode: 'subscription-unlimited', vertexProjectId: 'gcp-prod-analytics', vertexLocation: 'us-central1', isHealthy: true, lastPingMs: 55 },
+  { id: 'groq', name: 'Groq Cloud', isEnabled: true, billingMode: 'pay-per-token', apiKey: 'gsk_sample_live_key_9934', isHealthy: true, lastPingMs: 18 },
+  { id: 'ollama', name: 'Local Ollama (11434)', isEnabled: true, billingMode: 'subscription-unlimited', baseUrl: 'http://localhost:11434', isHealthy: true, lastPingMs: 4 }
 ];
 
 const INITIAL_FALLBACK_CHAINS: FallbackChain[] = [
@@ -202,14 +211,14 @@ const INITIAL_TRACES: ActivityTrace[] = [
     fallbacksTriggered: [],
     spans: [
       { id: 'sp-5', name: 'MCP Dispatch [github::get_pull_request]', startTime: 0, endTime: 15, durationMs: 15, status: 'ok', attributes: { tool: 'github' } },
-      { id: 'sp-6', name: 'GitHub API REST Call', startTime: 15, endTime: 365, durationMs: 350, status: 'ok', attributes: { repo: 'tetheriq/core', pr: 42 } },
+      { id: 'sp-6', name: 'GitHub API REST Call', startTime: 15, endTime: 365, durationMs: 350, status: 'ok', attributes: { repo: 'tethermesh/core', pr: 42 } },
       { id: 'sp-7', name: 'Stdio Serialization to Cursor', startTime: 365, endTime: 380, durationMs: 15, status: 'ok', attributes: { bytes: 4200 } }
     ],
     requestPayloadSummary: {
       messagesCount: 1,
       toolsCount: 1,
       stream: false,
-      samplePrompt: "Call github::get_pull_request(owner='tetheriq', repo='core', pull_number=42)"
+      samplePrompt: "Call github::get_pull_request(owner='tethermesh', repo='core', pull_number=42)"
     },
     responsePayloadSummary: {
       toolCallsMade: ['github::get_pull_request'],
@@ -299,6 +308,10 @@ const INITIAL_AGENTS: ConnectedAgent[] = [
   }
 ];
 
+import { telemetryStreamService } from '../services/telemetryStreamService';
+
+let isTelemetryInitialized = false;
+
 export const useTetherStore = create<TetherState>((set, get) => ({
   // Navigation & Modals
   activeTab: 'hud',
@@ -319,35 +332,177 @@ export const useTetherStore = create<TetherState>((set, get) => ({
   proxyHost: '127.0.0.1',
   appVersion: 'v1.0.0',
 
-  // Telemetry & Spend
-  telemetryHistory: Array.from({ length: 20 }, (_, i) => ({
-    timestamp: Date.now() - (20 - i) * 3000,
-    tokensPerSecond: Math.floor(25 + Math.random() * 45),
-    inputTokens: 1200 + Math.floor(Math.random() * 400),
-    outputTokens: 350 + Math.floor(Math.random() * 150),
-    latencyMs: Math.floor(350 + Math.random() * 180),
-    costEstimate: 0.008 + Math.random() * 0.005,
-    provider: 'Anthropic Direct',
-    model: 'claude-3-7-sonnet'
-  })),
-  currentTokensPerSec: 54.2,
-  currentLatencyMs: 385,
-  currentBurnRatePerHour: 1.38,
+  fetchGatewayHealth: async () => {
+    // Start real-time telemetry stream on first health check
+    if (!isTelemetryInitialized) {
+      isTelemetryInitialized = true;
+      telemetryStreamService.subscribe((update) => {
+        set((state) => {
+          let nextTraces = state.traces;
+          if (update.traces) {
+            nextTraces = update.traces;
+          } else if (update.newTrace) {
+            nextTraces = [update.newTrace, ...state.traces.filter((t) => t.id !== update.newTrace!.id)].slice(0, 100);
+          }
+
+          let nextAgents = state.connectedAgents;
+          if (update.agents) {
+            nextAgents = update.agents;
+          } else if (update.updatedAgent) {
+            const idx = state.connectedAgents.findIndex((a) => a.id === update.updatedAgent!.id);
+            if (idx >= 0) {
+              nextAgents = [...state.connectedAgents];
+              nextAgents[idx] = update.updatedAgent;
+            } else {
+              nextAgents = [update.updatedAgent, ...state.connectedAgents];
+            }
+          }
+
+          let nextHistory = state.telemetryHistory;
+          if (update.history && update.history.length > 0) {
+            nextHistory = update.history;
+          } else if (update.point) {
+            nextHistory = [...state.telemetryHistory, update.point].slice(-40);
+          }
+
+          const nextTokensPerSec = update.stats?.tokensPerSecond ?? (update.point ? update.point.tokensPerSecond : state.currentTokensPerSec);
+          const nextLatency = update.stats?.currentLatencyMs ?? (update.point ? update.point.latencyMs : state.currentLatencyMs);
+          const nextBurnRate = update.stats?.currentBurnRatePerHour ?? state.currentBurnRatePerHour;
+
+          return {
+            traces: nextTraces,
+            connectedAgents: nextAgents,
+            telemetryHistory: nextHistory,
+            currentTokensPerSec: nextTokensPerSec,
+            currentLatencyMs: nextLatency,
+            currentBurnRatePerHour: nextBurnRate,
+            isProxyRunning: true,
+          };
+        });
+      });
+    }
+
+    try {
+      // 1. Check LiteLLM liveness
+      const healthRes = await fetch('http://127.0.0.1:4000/health/liveliness');
+      if (!healthRes.ok) {
+        set({ isProxyRunning: false });
+        return;
+      }
+
+      set({ isProxyRunning: true });
+
+      // 2. Fetch spend data from LiteLLM
+      const spendData = await fetchLiteLLMSpend('http://127.0.0.1:4000');
+
+      // 3. Load persisted budget baseline (for monthly totals and limits)
+      const persisted = await loadPersistedBudget();
+
+      // 4. Merge: LiteLLM's daily spend + persisted monthly accumulation
+      const dailySpend = spendData.dailySpend || persisted.dailySpend;
+      const monthlySpend = persisted.monthlySpend + Math.max(0, spendData.dailySpend - persisted.dailySpend);
+      const isTripped = dailySpend >= persisted.dailyLimit;
+
+      // 5. Update store
+      set((state) => ({
+        budget: {
+          ...state.budget,
+          currentDailySpend: dailySpend,
+          currentMonthlySpend: monthlySpend,
+          isCircuitBreakerTripped: isTripped,
+        }
+      }));
+
+      // 6. Persist updated budget to disk
+      const updatedPersisted = {
+        ...persisted,
+        dailySpend,
+        monthlySpend,
+        isCircuitBreakerTripped: isTripped,
+        totalTokensProcessed: persisted.totalTokensProcessed + spendData.totalTokens,
+      };
+      await savePersistedBudget(updatedPersisted);
+
+    } catch {
+      // Gateway not responding — sidecar may still be starting up
+    }
+  },
+
+  // Telemetry & Spend (Real dynamic rolling values)
+  telemetryHistory: [],
+  currentTokensPerSec: 0,
+  currentLatencyMs: 0,
+  currentBurnRatePerHour: 0,
   budget: {
     dailyLimit: 10.00,
     monthlyLimit: 150.00,
-    currentDailySpend: 1.38,
-    currentMonthlySpend: 24.80,
+    currentDailySpend: 0.00,
+    currentMonthlySpend: 0.00,
     isCircuitBreakerTripped: false,
     hardStopEnabled: true,
     lastResetDate: new Date().toISOString().split('T')[0]
   },
-  updateBudgetLimits: (daily, monthly) => set((state) => ({
-    budget: { ...state.budget, dailyLimit: daily, monthlyLimit: monthly }
-  })),
-  resetCircuitBreaker: () => set((state) => ({
-    budget: { ...state.budget, isCircuitBreakerTripped: false }
-  })),
+  updateBudgetLimits: async (daily, monthly) => {
+    set((state) => ({
+      budget: { ...state.budget, dailyLimit: daily, monthlyLimit: monthly }
+    }));
+
+    // Persist new limits to local budget file
+    try {
+      const persisted = await loadPersistedBudget();
+      await savePersistedBudget({
+        ...persisted,
+        dailyLimit: daily,
+        monthlyLimit: monthly,
+      });
+    } catch {}
+
+    // Regenerate LiteLLM config with new max_budget
+    // Note: LiteLLM picks up config changes on restart.
+    // For live updates, the sidecar would need to be restarted.
+    try {
+      const state = get();
+      const configYaml = generateLiteLLMConfig({
+        providers: state.providers,
+        fallbackChains: state.fallbackChains,
+        virtualAliases: state.virtualAliases,
+        budget: { ...state.budget, dailyLimit: daily, monthlyLimit: monthly },
+      });
+      console.log('[TetherStore] Generated LiteLLM config for budget update');
+      // Write config via Tauri IPC if available
+      if (window.__TAURI__) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const paths = await invoke<{ app_data_dir: string }>('get_system_paths');
+        await invoke('write_system_config_file', {
+          filePath: `${paths.app_data_dir}\\TetherMesh\\litellm_config.yaml`,
+          content: configYaml,
+          createBackup: true,
+        });
+      }
+    } catch (err) {
+      console.error('[TetherStore] Failed to regenerate LiteLLM config:', err);
+    }
+  },
+  resetCircuitBreaker: async () => {
+    set((state) => ({
+      budget: { ...state.budget, isCircuitBreakerTripped: false, currentDailySpend: 0 }
+    }));
+
+    // Reset LiteLLM's spend tracking
+    try {
+      await fetch('http://127.0.0.1:4000/spend/reset', { method: 'POST' });
+    } catch {}
+
+    // Reset persisted budget
+    try {
+      const persisted = await loadPersistedBudget();
+      await savePersistedBudget({
+        ...persisted,
+        dailySpend: 0,
+        isCircuitBreakerTripped: false,
+      });
+    } catch {}
+  },
   triggerSpend: (amount, tokens) => set((state) => {
     const newDaily = state.budget.currentDailySpend + amount;
     const newMonthly = state.budget.currentMonthlySpend + amount;
@@ -407,7 +562,6 @@ export const useTetherStore = create<TetherState>((set, get) => ({
       return { installedTools: updatedList, selectedToolForDrawer: null };
     });
 
-    // Auto-sync
     await get().syncAllTools();
   },
   toggleToolEnabled: (toolId) => {
@@ -428,8 +582,8 @@ export const useTetherStore = create<TetherState>((set, get) => ({
     return results;
   },
 
-  // Connected Agents
-  connectedAgents: INITIAL_AGENTS,
+  // Connected Agents (Dynamically auto-detected from incoming requests)
+  connectedAgents: [],
   addOrUpdateAgent: (agent) => set((state) => {
     const idx = state.connectedAgents.findIndex(a => a.id === agent.id);
     if (idx >= 0) {
@@ -440,8 +594,8 @@ export const useTetherStore = create<TetherState>((set, get) => ({
     return { connectedAgents: [agent, ...state.connectedAgents] };
   }),
 
-  // Traces & Observability
-  traces: INITIAL_TRACES,
+  // Traces & Observability (Dynamically ingested from port 4000)
+  traces: [],
   selectedTrace: null,
   setSelectedTrace: (trace) => set({ selectedTrace: trace }),
   addTrace: (trace) => set((state) => ({
@@ -450,9 +604,9 @@ export const useTetherStore = create<TetherState>((set, get) => ({
 
   // Terminal & PTY
   terminalLogs: [
-    '[TetherIQ] Control Plane Initialized on http://127.0.0.1:4000',
-    '[TetherIQ] Environment exports injected: ANTHROPIC_BASE_URL=http://127.0.0.1:4000, OPENAI_BASE_URL=http://127.0.0.1:4000/v1',
-    '[TetherIQ] Ready to run Claude Code CLI, Aider, or custom agent scripts.',
+    '[TetherMesh] Control Plane Initialized on http://127.0.0.1:4000',
+    '[TetherMesh] Environment exports injected: ANTHROPIC_BASE_URL=http://127.0.0.1:4000, OPENAI_BASE_URL=http://127.0.0.1:4000/v1',
+    '[TetherMesh] Ready to run Claude Code CLI, Aider, or custom agent scripts.',
     'powershell.exe -NoLogo'
   ],
   appendTerminalLog: (text) => set((state) => ({
