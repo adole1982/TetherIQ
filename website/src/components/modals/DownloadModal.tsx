@@ -27,7 +27,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({ isOpen, onClose })
 
     try {
       // Submit to Formspree
-      const response = await fetch('https://formspree.io/f/xkokwrvn', {
+      const response = await fetch('https://formspree.io/f/mojkzgeb', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
