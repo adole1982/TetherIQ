@@ -635,7 +635,63 @@ export const HomePage: React.FC<HomePageProps> = ({ navigate, onOpenDownload }) 
         </div>
       </section>
 
-      {/* 7. Bottom Conversion Banner */}
+      {/* 7. FAQ Section */}
+      <section className="py-16 md:py-20 bg-slate-50 border-t border-slate-200/80">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <span className="text-xs font-bold font-mono tracking-widest text-cyan-600 uppercase">Frequently Asked Questions</span>
+            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight mt-2">
+              Everything You Need to Know
+            </h2>
+            <p className="text-sm text-slate-600 mt-2">
+              Clear answers about pay-as-you-go keys, MCP tool synchronization, and local execution.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {/* FAQ 1 */}
+            <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-cyan-600" />
+                Does TetherIQ track spend for $20/mo web subscriptions, or only Pay-As-You-Go API keys?
+              </h3>
+              <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+                The <strong>Spend Tracker & Circuit Breaker</strong> is designed specifically for <strong>Pay-As-You-Go API keys</strong> (Anthropic <code className="text-xs font-mono bg-slate-100 px-1 py-0.5 rounded text-cyan-700">sk-ant-...</code>, OpenAI <code className="text-xs font-mono bg-slate-100 px-1 py-0.5 rounded text-cyan-700">sk-proj-...</code>, OpenRouter, DeepSeek, Groq) where autonomous agents like Claude Code, Cursor, or Aider can rack up unexpected per-token bills. 
+              </p>
+              <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+                However, TetherIQ's <strong>1-Click MCP Tool Sync</strong> works for <em>everybody</em>, allowing you to connect databases, GitHub, web search, and filesystem tools across 8+ editors regardless of account type!
+              </p>
+            </div>
+
+            {/* FAQ 2 */}
+            <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-emerald-600" />
+                Do I need to manually open TetherIQ every time I use Cursor or Claude Code?
+              </h3>
+              <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+                Not if you enable <strong>Start on Boot</strong>! In TetherIQ's Settings, you can toggle <strong>'Start on Boot'</strong> and <strong>'Minimize to System Tray'</strong>. 
+              </p>
+              <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+                Once turned on, TetherIQ starts quietly in the background when your computer boots up, ensuring your local proxy gateway (<code className="text-xs font-mono bg-slate-100 px-1 py-0.5 rounded text-cyan-700">127.0.0.1:4000</code>), custom MCP tools, and spend protections are always online without you having to remember to open the app each morning.
+              </p>
+            </div>
+
+            {/* FAQ 3 */}
+            <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Lock className="w-4 h-4 text-cyan-600" />
+                Does TetherIQ ever send my code or API keys to external cloud servers?
+              </h3>
+              <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+                Never. TetherIQ is <strong>100% air-gapped and local-first</strong>. Your API keys are encrypted on your local machine, requests route directly from your localhost to your chosen providers, and spend ledgers live in your private local SQLite database. No telemetry or prompt data ever leaves your computer.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 8. Bottom Conversion Banner */}
       <section className="py-20 bg-slate-900 text-white relative overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full bg-radial from-cyan-900/30 via-transparent to-transparent pointer-events-none" />
         

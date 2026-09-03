@@ -7,6 +7,7 @@ import { SecurityPage } from './pages/SecurityPage';
 import { McpPage } from './pages/McpPage';
 import { DocsPage } from './pages/DocsPage';
 import { ChangelogPage } from './pages/ChangelogPage';
+import { Analytics } from '@vercel/analytics/react';
 
 export function App() {
   const [currentRoute, setCurrentRoute] = useState<string>('/');
@@ -73,6 +74,9 @@ export function App() {
         isOpen={isDownloadOpen} 
         onClose={() => setIsDownloadOpen(false)} 
       />
+
+      {/* Vercel Web Analytics */}
+      <Analytics />
     </div>
   );
 }
