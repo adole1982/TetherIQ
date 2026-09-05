@@ -1,5 +1,9 @@
 fn main() {
-    tauri_build::build();
+    tauri_build::try_build(
+        tauri_build::Attributes::new()
+            .windows_attributes(tauri_build::WindowsAttributes::new_without_app_manifest()),
+    )
+    .expect("failed to run tauri-build");
 
     #[cfg(target_os = "windows")]
     {
