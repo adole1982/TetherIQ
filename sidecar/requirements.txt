@@ -4,7 +4,7 @@ uvicorn==0.34.0
 pyinstaller==6.12.0
 certifi==2025.1.31
 httpx==0.28.1
-pydantic==2.10.6
-fastapi==0.115.8
-starlette==0.45.3
+pydantic==2.13.4
+fastapi==0.136.3
+starlette==1.0.1
 pyyaml==6.0.2

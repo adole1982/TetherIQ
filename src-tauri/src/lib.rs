@@ -3273,8 +3273,10 @@ impl ConfigTarget {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum ExpectedRevision {
     Missing,
+    #[serde(rename = "sha256")]
     Exact(String),
 }
 
@@ -3287,8 +3289,9 @@ pub struct DesiredToolState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolSyncStatus {
-    Configured,
-    Pruned,
+    Installed,
+    Updated,
+    Removed,
     Unchanged,
     Collision,
     MissingCredential,
@@ -3311,6 +3314,7 @@ pub struct ClientSyncResponse {
     pub revision: ExpectedRevision,
     pub tool_results: Vec<StructuredToolResult>,
     pub error: Option<String>,
+    pub backup_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -3326,7 +3330,7 @@ pub struct RevocationResult {
 pub struct ToolAssignmentState {
     pub tool_id: String,
     pub is_enabled: bool,
-    pub selected_targets: Vec<String>,
+    pub target_clients: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -3479,7 +3483,7 @@ pub fn sync_client_config_locked(
     app: &AppHandle,
     target: ConfigTarget,
     desired_tools: Vec<DesiredToolState>,
-    _strip_env: bool,
+    create_backup: bool,
     expected_revision: ExpectedRevision,
 ) -> Result<ClientSyncResponse, String> {
     let (config_path, is_jsonc) = get_client_config_path(app, target)?;
@@ -3504,6 +3508,21 @@ pub fn sync_client_config_locked(
         sha256_hex(&current_bytes)
     } else {
         String::new()
+    };
+
+    let backup_path = if create_backup && file_exists {
+        let backup = config_path.with_extension(format!(
+            "{}.bak",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|e| format!("Clock error: {}", e))?
+                .as_millis()
+        ));
+        fs::copy(&config_path, &backup)
+            .map_err(|e| format!("Failed to create config backup: {}", e))?;
+        Some(backup.to_string_lossy().to_string())
+    } else {
+        None
     };
 
     match expected_revision {
@@ -3573,7 +3592,7 @@ pub fn sync_client_config_locked(
                         target_manifest.remove(&dt.tool_id);
                         tool_results.push(StructuredToolResult {
                             tool_id: dt.tool_id.clone(),
-                            status: ToolSyncStatus::Pruned,
+                            status: ToolSyncStatus::Removed,
                             message: Some("Tool cleanly pruned from target".into()),
                             collision_details: None,
                             missing_fields: None,
@@ -3657,6 +3676,12 @@ pub fn sync_client_config_locked(
                 }
             }
 
+            let sync_status = if existing_item.is_some() {
+                ToolSyncStatus::Updated
+            } else {
+                ToolSyncStatus::Installed
+            };
+
             let mut server_table = toml_edit::Table::new();
             server_table.insert("command", toml_edit::value(tool_def.command));
             let mut args_arr = toml_edit::Array::new();
@@ -3679,7 +3704,7 @@ pub fn sync_client_config_locked(
 
             tool_results.push(StructuredToolResult {
                 tool_id: dt.tool_id.clone(),
-                status: ToolSyncStatus::Configured,
+                status: sync_status,
                 message: Some("Successfully synchronized".into()),
                 collision_details: None,
                 missing_fields: None,
@@ -3745,7 +3770,7 @@ pub fn sync_client_config_locked(
                         target_manifest.remove(&dt.tool_id);
                         tool_results.push(StructuredToolResult {
                             tool_id: dt.tool_id.clone(),
-                            status: ToolSyncStatus::Pruned,
+                            status: ToolSyncStatus::Removed,
                             message: Some("Tool cleanly pruned from target".into()),
                             collision_details: None,
                             missing_fields: None,
@@ -3813,21 +3838,23 @@ pub fn sync_client_config_locked(
                 tool_def.server_url,
             );
 
-            if let Some(existing) = existing_item {
-                if !is_managed {
-                    tool_results.push(StructuredToolResult {
-                        tool_id: dt.tool_id.clone(),
-                        status: ToolSyncStatus::Collision,
-                        message: Some(
-                            "Collision: tool exists but was configured externally".into(),
-                        ),
-                        collision_details: Some("Entry modified by user or external tool".into()),
-                        missing_fields: None,
-                    });
-                    any_failures = true;
-                    continue;
-                }
+            if existing_item.is_some() && !is_managed {
+                tool_results.push(StructuredToolResult {
+                    tool_id: dt.tool_id.clone(),
+                    status: ToolSyncStatus::Collision,
+                    message: Some("Collision: tool exists but was configured externally".into()),
+                    collision_details: Some("Entry modified by user or external tool".into()),
+                    missing_fields: None,
+                });
+                any_failures = true;
+                continue;
             }
+
+            let sync_status = if existing_item.is_some() {
+                ToolSyncStatus::Updated
+            } else {
+                ToolSyncStatus::Installed
+            };
 
             mcp_map.insert(
                 dt.tool_id.clone(),
@@ -3841,7 +3868,7 @@ pub fn sync_client_config_locked(
 
             tool_results.push(StructuredToolResult {
                 tool_id: dt.tool_id.clone(),
-                status: ToolSyncStatus::Configured,
+                status: sync_status,
                 message: Some("Successfully synchronized".into()),
                 collision_details: None,
                 missing_fields: None,
@@ -3870,6 +3897,7 @@ pub fn sync_client_config_locked(
         } else {
             None
         },
+        backup_path,
     })
 }
 
@@ -4508,12 +4536,12 @@ pub fn read_client_config(
 pub fn sync_client_config(
     app: AppHandle,
     target: ConfigTarget,
-    desired_tools: Vec<DesiredToolState>,
-    strip_env: bool,
+    tools: Vec<DesiredToolState>,
+    create_backup: bool,
     expected_revision: ExpectedRevision,
 ) -> Result<ClientSyncResponse, String> {
     let _lock = CONFIG_WRITE_LOCK.lock().unwrap();
-    sync_client_config_locked(&app, target, desired_tools, strip_env, expected_revision)
+    sync_client_config_locked(&app, target, tools, create_backup, expected_revision)
 }
 
 #[tauri::command]
@@ -4555,7 +4583,28 @@ pub struct ToolCredentialSummary {
     pub tool_id: String,
     pub configured: bool,
     pub configured_fields: Vec<String>,
-    pub field_hints: HashMap<String, String>,
+    pub display_hints: HashMap<String, String>,
+    pub updated_at: u64,
+}
+
+fn now_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+fn secret_hint(secret: &str) -> String {
+    let chars: Vec<char> = secret.chars().collect();
+    if chars.len() > 6 {
+        format!(
+            "{}...{}",
+            chars.iter().take(2).collect::<String>(),
+            chars.iter().skip(chars.len() - 2).collect::<String>()
+        )
+    } else {
+        "••••••••".to_string()
+    }
 }
 
 #[tauri::command]
@@ -4571,11 +4620,7 @@ pub fn list_tool_credential_summaries() -> Result<Vec<ToolCredentialSummary>, St
             if let Ok(sec) = get_vault_secret(tool.id, field.key) {
                 if !sec.is_empty() {
                     configured_fields.push(field.key.to_string());
-                    let hint = if sec.len() > 6 {
-                        format!("{}...{}", &sec[..2], &sec[sec.len() - 2..])
-                    } else {
-                        "••••••••".to_string()
-                    };
+                    let hint = secret_hint(&sec);
                     field_hints.insert(field.key.to_string(), hint);
                 }
             }
@@ -4585,7 +4630,8 @@ pub fn list_tool_credential_summaries() -> Result<Vec<ToolCredentialSummary>, St
             tool_id: tool.id.to_string(),
             configured: !configured_fields.is_empty(),
             configured_fields,
-            field_hints,
+            display_hints: field_hints,
+            updated_at: now_millis(),
         });
     }
 
@@ -4594,27 +4640,44 @@ pub fn list_tool_credential_summaries() -> Result<Vec<ToolCredentialSummary>, St
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCredentialMutation {
-    pub set_fields: HashMap<String, String>,
-    pub delete_fields: Vec<String>,
+    pub field: String,
+    pub operation: String,
+    pub value: Option<String>,
 }
 
 #[tauri::command]
 pub fn mutate_tool_credentials(
     tool_id: String,
-    mutations: ToolCredentialMutation,
+    mutations: Vec<ToolCredentialMutation>,
 ) -> Result<ToolCredentialSummary, String> {
-    for (k, v) in mutations.set_fields {
-        set_vault_secret(&tool_id, &k, &v)?;
-    }
-    for k in mutations.delete_fields {
-        let _ = delete_vault_secret(&tool_id, &k);
-    }
+    let tool =
+        find_tool_definition(&tool_id).ok_or_else(|| format!("Unknown tool ID: {}", tool_id))?;
+    let allowed_fields: HashSet<&str> = tool.fields.iter().map(|field| field.key).collect();
 
-    let catalog = get_full_catalog();
-    let tool = catalog
-        .iter()
-        .find(|t| t.id == tool_id)
-        .ok_or_else(|| format!("Unknown tool ID: {}", tool_id))?;
+    for mutation in mutations {
+        if !allowed_fields.contains(mutation.field.as_str()) {
+            return Err(format!("Unknown credential field: {}", mutation.field));
+        }
+        match mutation.operation.as_str() {
+            "set" => {
+                let value = mutation
+                    .value
+                    .map(|value| value.trim().to_string())
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| format!("Credential {} cannot be empty", mutation.field))?;
+                set_vault_secret(&tool_id, &mutation.field, &value)?;
+            }
+            "delete" => {
+                let _ = delete_vault_secret(&tool_id, &mutation.field);
+            }
+            _ => {
+                return Err(format!(
+                    "Invalid credential operation: {}",
+                    mutation.operation
+                ))
+            }
+        }
+    }
 
     let mut configured_fields = Vec::new();
     let mut field_hints = HashMap::new();
@@ -4623,11 +4686,7 @@ pub fn mutate_tool_credentials(
         if let Ok(sec) = get_vault_secret(&tool_id, field.key) {
             if !sec.is_empty() {
                 configured_fields.push(field.key.to_string());
-                let hint = if sec.len() > 6 {
-                    format!("{}...{}", &sec[..2], &sec[sec.len() - 2..])
-                } else {
-                    "••••••••".to_string()
-                };
+                let hint = secret_hint(&sec);
                 field_hints.insert(field.key.to_string(), hint);
             }
         }
@@ -4637,7 +4696,8 @@ pub fn mutate_tool_credentials(
         tool_id,
         configured: !configured_fields.is_empty(),
         configured_fields,
-        field_hints,
+        display_hints: field_hints,
+        updated_at: now_millis(),
     })
 }
 
@@ -4645,7 +4705,8 @@ pub fn mutate_tool_credentials(
 pub struct CredentialSummary {
     pub provider: String,
     pub configured: bool,
-    pub hint: String,
+    pub display_hint: String,
+    pub updated_at: u64,
 }
 
 #[tauri::command]
@@ -4666,22 +4727,20 @@ pub fn list_credential_summaries() -> Result<Vec<CredentialSummary>, String> {
     for p in providers {
         match get_provider_secret(p) {
             Ok(sec) if !sec.is_empty() => {
-                let hint = if sec.len() > 6 {
-                    format!("{}...{}", &sec[..2], &sec[sec.len() - 2..])
-                } else {
-                    "••••••••".to_string()
-                };
+                let hint = secret_hint(&sec);
                 summaries.push(CredentialSummary {
                     provider: p.to_string(),
                     configured: true,
-                    hint,
+                    display_hint: hint,
+                    updated_at: now_millis(),
                 });
             }
             _ => {
                 summaries.push(CredentialSummary {
                     provider: p.to_string(),
                     configured: false,
-                    hint: String::new(),
+                    display_hint: String::new(),
+                    updated_at: 0,
                 });
             }
         }
@@ -4692,18 +4751,34 @@ pub fn list_credential_summaries() -> Result<Vec<CredentialSummary>, String> {
 #[tauri::command]
 pub fn set_provider_credential(
     provider: String,
-    secret: String,
+    credential: String,
 ) -> Result<CredentialSummary, String> {
-    set_provider_secret(&provider, &secret)?;
-    let hint = if secret.len() > 6 {
-        format!("{}...{}", &secret[..2], &secret[secret.len() - 2..])
-    } else {
-        "••••••••".to_string()
-    };
+    const PROVIDERS: [&str; 10] = [
+        "openai",
+        "anthropic",
+        "azure",
+        "gemini",
+        "aws",
+        "openrouter",
+        "mistral",
+        "deepseek",
+        "cohere",
+        "groq",
+    ];
+    if !PROVIDERS.contains(&provider.as_str()) {
+        return Err(format!("Unknown provider: {}", provider));
+    }
+    let credential = credential.trim();
+    if credential.is_empty() {
+        return Err("Credential cannot be empty".into());
+    }
+    set_provider_secret(&provider, credential)?;
+    let hint = secret_hint(credential);
     Ok(CredentialSummary {
         provider,
         configured: true,
-        hint,
+        display_hint: hint,
+        updated_at: now_millis(),
     })
 }
 
@@ -4892,6 +4967,99 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tauri::command]
+    fn ipc_contract_probe(
+        expected_revision: ExpectedRevision,
+        tools: Vec<DesiredToolState>,
+        create_backup: bool,
+        assignments: Vec<ToolAssignmentState>,
+        mutations: Vec<ToolCredentialMutation>,
+        provider: String,
+        credential: String,
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "expected_revision": expected_revision,
+            "tools": tools,
+            "create_backup": create_backup,
+            "assignments": assignments,
+            "mutations": mutations,
+            "provider": provider,
+            "credential": credential,
+        })
+    }
+
+    #[test]
+    fn test_frontend_contract_crosses_real_tauri_ipc_boundary() {
+        let app = tauri::test::mock_builder()
+            .invoke_handler(tauri::generate_handler![ipc_contract_probe])
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .expect("failed to build mock Tauri app");
+        let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .expect("failed to build mock webview");
+        let body = serde_json::json!({
+            "expectedRevision": { "kind": "sha256", "value": "abc123" },
+            "tools": [{ "tool_id": "github", "is_enabled": true }],
+            "createBackup": true,
+            "assignments": [{
+                "tool_id": "github",
+                "is_enabled": true,
+                "target_clients": ["cursor", "vscode"]
+            }],
+            "mutations": [{ "field": "GITHUB_TOKEN", "operation": "set", "value": "sentinel" }],
+            "provider": "openai",
+            "credential": "sentinel"
+        });
+
+        tauri::test::assert_ipc_response(
+            &webview,
+            tauri::webview::InvokeRequest {
+                cmd: "ipc_contract_probe".into(),
+                callback: tauri::ipc::CallbackFn(0),
+                error: tauri::ipc::CallbackFn(1),
+                url: if cfg!(windows) {
+                    "http://tauri.localhost"
+                } else {
+                    "tauri://localhost"
+                }
+                .parse()
+                .unwrap(),
+                body: tauri::ipc::InvokeBody::Json(body),
+                headers: Default::default(),
+                invoke_key: tauri::test::INVOKE_KEY.to_string(),
+            },
+            Ok(serde_json::json!({
+                "expected_revision": { "kind": "sha256", "value": "abc123" },
+                "tools": [{ "tool_id": "github", "is_enabled": true }],
+                "create_backup": true,
+                "assignments": [{
+                    "tool_id": "github",
+                    "is_enabled": true,
+                    "target_clients": ["cursor", "vscode"]
+                }],
+                "mutations": [{ "field": "GITHUB_TOKEN", "operation": "set", "value": "sentinel" }],
+                "provider": "openai",
+                "credential": "sentinel"
+            })),
+        );
+    }
+
+    #[test]
+    fn test_tool_sync_status_contract_names() {
+        assert_eq!(
+            serde_json::to_value(ToolSyncStatus::Installed).unwrap(),
+            serde_json::json!("installed")
+        );
+        assert_eq!(
+            serde_json::to_value(ToolSyncStatus::Updated).unwrap(),
+            serde_json::json!("updated")
+        );
+        assert_eq!(
+            serde_json::to_value(ToolSyncStatus::Removed).unwrap(),
+            serde_json::json!("removed")
+        );
+    }
 
     #[test]
     fn test_numeric_loopback_url_validation() {
