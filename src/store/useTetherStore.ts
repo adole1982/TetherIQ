@@ -48,7 +48,6 @@ interface TetherState {
   toggleProxy: () => void;
   proxyPort: number;
   proxyHost: string;
-  gatewayToken: string | null;
   appVersion: string;
   fetchGatewayHealth: () => Promise<void>;
 
@@ -359,23 +358,13 @@ export const useTetherStore = create<TetherState>((set, get) => ({
   toggleProxy: () => set((state) => ({ isProxyRunning: !state.isProxyRunning })),
   proxyPort: 4000,
   proxyHost: '127.0.0.1',
-  gatewayToken: null,
   appVersion: 'v1.0.0',
 
   fetchGatewayHealth: async () => {
-    // 0. Ensure gateway token and authoritative native MCP catalog are populated from Tauri backend
-    let currentGatewayToken = get().gatewayToken;
-
+    // Populate the authoritative native MCP catalog without exposing gateway credentials.
     if (typeof window !== 'undefined' && (window as any).__TAURI__) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        if (!currentGatewayToken) {
-          const diag = await invoke<any>('get_gateway_diagnostics');
-          if (diag) {
-            currentGatewayToken = diag.gateway_token;
-            set({ gatewayToken: diag.gateway_token });
-          }
-        }
         const nativeCatalog = await invoke<any[]>('get_mcp_catalog');
         if (nativeCatalog && nativeCatalog.length > 0) {
           set({ mcpCatalog: nativeCatalog });

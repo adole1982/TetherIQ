@@ -31,7 +31,6 @@ export const TerminalDrawer: React.FC = () => {
     proxy_port: number;
     anthropic_base_url: string;
     openai_base_url: string;
-    gateway_token?: string;
     sidecar_pid?: number;
   }>({
     proxy_running: isProxyRunning,
@@ -39,7 +38,6 @@ export const TerminalDrawer: React.FC = () => {
     proxy_port: proxyPort,
     anthropic_base_url: `http://127.0.0.1:${proxyPort}`,
     openai_base_url: `http://127.0.0.1:${proxyPort}/v1`,
-    gateway_token: 'sk-tether-local',
   });
 
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -72,14 +70,13 @@ export const TerminalDrawer: React.FC = () => {
 
   if (!isTerminalOpen) return null;
 
-  const handleCopy = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(key);
+  const handleCopy = async (client: 'anthropic' | 'openai') => {
+    if (typeof window === 'undefined' || !(window as any).__TAURI__) return;
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('copy_gateway_environment', { client });
+    setCopiedKey(client);
     setTimeout(() => setCopiedKey(null), 2000);
   };
-
-  const anthropicExport = `export ANTHROPIC_BASE_URL=http://127.0.0.1:${diagnostics.proxy_port || 4000}\nexport ANTHROPIC_API_KEY=${diagnostics.gateway_token || 'sk-tether-local'}`;
-  const openaiExport = `export OPENAI_BASE_URL=http://127.0.0.1:${diagnostics.proxy_port || 4000}/v1\nexport OPENAI_API_KEY=${diagnostics.gateway_token || 'sk-tether-local'}`;
 
   return (
     <div className={`fixed bottom-0 left-64 right-0 z-40 bg-slate-950/95 border-t border-slate-800 shadow-2xl backdrop-blur-md flex flex-col transition-all duration-200 ${
@@ -137,7 +134,7 @@ export const TerminalDrawer: React.FC = () => {
             <span className="text-cyan-400">Anthropic:</span>
             <span>{diagnostics.anthropic_base_url}</span>
             <button
-              onClick={() => handleCopy(anthropicExport, 'anthropic')}
+              onClick={() => void handleCopy('anthropic')}
               className="ml-1 text-slate-400 hover:text-cyan-400 transition-colors"
               title="Copy export command"
             >
@@ -149,7 +146,7 @@ export const TerminalDrawer: React.FC = () => {
             <span className="text-purple-400">OpenAI:</span>
             <span>{diagnostics.openai_base_url}</span>
             <button
-              onClick={() => handleCopy(openaiExport, 'openai')}
+              onClick={() => void handleCopy('openai')}
               className="ml-1 text-slate-400 hover:text-purple-400 transition-colors"
               title="Copy export command"
             >

@@ -160,9 +160,10 @@ fn delete_vault_secret(tool_id: &str, field_key: &str) -> Result<(), String> {
     let canonical = canonical_tool_field_key(tool_id, field_key);
     let entry = keyring::Entry::new(VAULT_SERVICE, &canonical)
         .map_err(|e| format!("Keyring init error for {}: {}", canonical, e))?;
-    entry
-        .delete_password()
-        .map_err(|e| format!("Keyring delete error for {}: {}", canonical, e))
+    match entry.delete_password() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(format!("Keyring delete error for {}: {}", canonical, e)),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -195,7 +196,7 @@ pub fn validate_numeric_loopback_url(url_str: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub fn validate_air_gapped_yaml(yaml_content: &str, app_data_dir: &Path) -> Result<(), String> {
+pub fn validate_air_gapped_yaml(yaml_content: &str, _app_data_dir: &Path) -> Result<(), String> {
     let doc: serde_yaml::Value =
         serde_yaml::from_str(yaml_content).map_err(|e| format!("YAML parsing failed: {}", e))?;
 
@@ -554,14 +555,14 @@ pub fn build_child_environment(
 
 pub async fn spawn_litellm_sidecar(
     app: AppHandle,
-    supervisor: tauri::State<'_, SidecarSupervisor>,
+    supervisor_state: Arc<Mutex<SidecarSupervisorState>>,
 ) -> Result<CommandChild, String> {
     let secret = generate_os_random_hex(32)?;
     let gateway_token = format!("tether_gw_{}", generate_os_random_hex(24)?);
     let instance_id = format!("tether_{}", generate_os_random_hex(8)?);
 
     let (generation, is_air_gapped) = {
-        let mut guard = supervisor.state.lock().unwrap();
+        let mut guard = supervisor_state.lock().unwrap();
         guard.generation += 1;
         guard.instance_id = instance_id.clone();
         guard.handshake_secret = secret.clone();
@@ -629,7 +630,7 @@ pub async fn spawn_litellm_sidecar(
         Ok(handle) => Some(handle),
         Err(error) => {
             let _ = child.kill();
-            let mut guard = supervisor.state.lock().unwrap();
+            let mut guard = supervisor_state.lock().unwrap();
             guard.phase = SidecarPhase::Failed;
             return Err(error);
         }
@@ -638,7 +639,7 @@ pub async fn spawn_litellm_sidecar(
     let job_handle = None;
 
     {
-        let mut guard = supervisor.state.lock().unwrap();
+        let mut guard = supervisor_state.lock().unwrap();
         guard.pid = Some(pid);
         guard.job_handle = job_handle;
     }
@@ -647,9 +648,7 @@ pub async fn spawn_litellm_sidecar(
     let mut ready_tx_opt = Some(ready_tx);
 
     let expected_instance_id = instance_id.clone();
-    let supervisor_clone = supervisor.inner().state.clone();
-    let app_handle_clone = app.clone();
-
+    let supervisor_clone = supervisor_state.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(event) = rx.recv().await {
             match event {
@@ -805,7 +804,7 @@ pub async fn spawn_litellm_sidecar(
     match tokio::time::timeout(std::time::Duration::from_secs(15), ready_rx).await {
         Ok(Ok(Ok(bound_port))) => {
             {
-                let mut guard = supervisor.state.lock().unwrap();
+                let mut guard = supervisor_state.lock().unwrap();
                 guard.bound_port = bound_port;
                 guard.phase = SidecarPhase::Ready;
             }
@@ -817,7 +816,7 @@ pub async fn spawn_litellm_sidecar(
         }
         Ok(Ok(Err(e))) => {
             let failed_job = {
-                let mut guard = supervisor.state.lock().unwrap();
+                let mut guard = supervisor_state.lock().unwrap();
                 guard.phase = SidecarPhase::Failed;
                 guard.pid = None;
                 guard.job_handle.take()
@@ -827,7 +826,7 @@ pub async fn spawn_litellm_sidecar(
         }
         Ok(Err(_)) => {
             let failed_job = {
-                let mut guard = supervisor.state.lock().unwrap();
+                let mut guard = supervisor_state.lock().unwrap();
                 guard.phase = SidecarPhase::Failed;
                 guard.pid = None;
                 guard.job_handle.take()
@@ -837,7 +836,7 @@ pub async fn spawn_litellm_sidecar(
         }
         Err(_) => {
             let failed_job = {
-                let mut guard = supervisor.state.lock().unwrap();
+                let mut guard = supervisor_state.lock().unwrap();
                 guard.phase = SidecarPhase::Failed;
                 guard.pid = None;
                 guard.job_handle.take()
@@ -886,6 +885,9 @@ impl SignedAdminClient {
             return Err(
                 "Sidecar is not running or has not bound an ephemeral port yet".to_string(),
             );
+        }
+        if secret.is_empty() {
+            return Err("Sidecar authentication secret is not initialized".to_string());
         }
 
         let timestamp = std::time::SystemTime::now()
@@ -950,28 +952,26 @@ impl SignedAdminClient {
             resp_bytes.extend_from_slice(&chunk);
         }
 
-        if !secret.is_empty() {
-            let expected_payload = format!("{}\n{}\n{}", nonce, status, sha256_hex(&resp_bytes));
-            let expected_mac: [u8; 32] =
-                hmac_sha256::HMAC::mac(expected_payload.as_bytes(), secret.as_bytes());
-            let mut expected_sig = String::with_capacity(64);
-            for b in expected_mac {
-                let _ = write!(&mut expected_sig, "{:02x}", b);
-            }
+        let expected_payload = format!("{}\n{}\n{}", nonce, status, sha256_hex(&resp_bytes));
+        let expected_mac: [u8; 32] =
+            hmac_sha256::HMAC::mac(expected_payload.as_bytes(), secret.as_bytes());
+        let mut expected_sig = String::with_capacity(64);
+        for b in expected_mac {
+            let _ = write!(&mut expected_sig, "{:02x}", b);
+        }
 
-            let received_sig = headers
-                .get("x-tether-response-signature")
-                .and_then(|v| v.to_str().ok())
-                .ok_or_else(|| {
-                    "Missing required X-Tether-Response-Signature header on sidecar response"
-                        .to_string()
-                })?;
+        let received_sig = headers
+            .get("x-tether-response-signature")
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| {
+                "Missing required X-Tether-Response-Signature header on sidecar response"
+                    .to_string()
+            })?;
 
-            if !constant_time_eq_hex(&expected_sig, received_sig) {
-                return Err(
-                    "Cryptographic response signature mismatch on sidecar response".to_string(),
-                );
-            }
+        if !constant_time_eq_hex(&expected_sig, received_sig) {
+            return Err(
+                "Cryptographic response signature mismatch on sidecar response".to_string(),
+            );
         }
 
         Ok((resp_bytes, status))
@@ -1131,7 +1131,7 @@ pub enum TransportType {
     Sse,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct NativeCatalogField {
     pub key: &'static str,
     pub label: &'static str,
@@ -1145,7 +1145,7 @@ pub struct NativeCatalogField {
     pub placeholder: Option<&'static str>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct NativeCatalogTool {
     pub id: &'static str,
     pub name: &'static str,
@@ -3815,7 +3815,7 @@ pub fn sync_client_config_locked(
                 tool_def.server_url,
             );
 
-            if let Some(existing) = existing_item {
+            if existing_item.is_some() {
                 if !is_managed {
                     tool_results.push(StructuredToolResult {
                         tool_id: dt.tool_id.clone(),
@@ -4144,19 +4144,16 @@ pub fn revoke_tool(app: AppHandle, tool_id: String) -> Result<RevocationResult, 
                     }
                     client_results.insert(target.id_str().to_string(), res);
                 } else {
-                    if config_path.exists() {
-                        if let Ok(content) = fs::read_to_string(&config_path) {
-                            if content.contains(&tool_id) {
-                                all_pruned_successfully = false;
-                            }
-                        }
-                    }
+                    all_pruned_successfully = false;
                     client_results.insert(
                         target.id_str().to_string(),
                         StructuredToolResult {
                             tool_id: tool_id.clone(),
-                            status: ToolSyncStatus::Unchanged,
-                            message: Some("Tool was not configured in target".to_string()),
+                            status: ToolSyncStatus::Error,
+                            message: Some(
+                                "Sync returned no explicit revocation result; preserving vault credentials"
+                                    .to_string(),
+                            ),
                             collision_details: None,
                             missing_fields: None,
                         },
@@ -4232,8 +4229,8 @@ pub fn check_runtime_environment() -> Result<serde_json::Value, String> {
         "has_node": has_node,
         "has_npx": has_npx,
         "has_python": has_python,
-        "node_version": if has_node { Some("v20.x".into()) } else { None },
-        "python_version": if has_python { Some("3.11.x".into()) } else { None },
+        "node_version": if has_node { Some("v20.x") } else { None },
+        "python_version": if has_python { Some("3.11.x") } else { None },
     }))
 }
 
@@ -4276,6 +4273,69 @@ pub fn get_proxy_status(
 }
 
 #[tauri::command]
+pub fn copy_gateway_environment(
+    supervisor: tauri::State<'_, SidecarSupervisor>,
+    client: String,
+) -> Result<(), String> {
+    use std::io::Write as IoWrite;
+    use std::process::Stdio;
+
+    let (port, gateway_token) = {
+        let guard = supervisor.state.lock().unwrap();
+        if guard.phase != SidecarPhase::Ready || guard.bound_port == 0 {
+            return Err("Gateway is not ready".to_string());
+        }
+        if guard.gateway_token.is_empty() {
+            return Err("Gateway credential is not initialized".to_string());
+        }
+        (guard.bound_port, guard.gateway_token.clone())
+    };
+
+    let content = match client.as_str() {
+        "anthropic" => format!(
+            "export ANTHROPIC_BASE_URL=http://127.0.0.1:{}\nexport ANTHROPIC_API_KEY={}",
+            port, gateway_token
+        ),
+        "openai" => format!(
+            "export OPENAI_BASE_URL=http://127.0.0.1:{}/v1\nexport OPENAI_API_KEY={}",
+            port, gateway_token
+        ),
+        _ => return Err("Unsupported gateway client".to_string()),
+    };
+
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut command = std::process::Command::new("powershell.exe");
+        command.args(["-NoProfile", "-NonInteractive", "-Command", "Set-Clipboard"]);
+        command
+    };
+    #[cfg(target_os = "macos")]
+    let mut command = std::process::Command::new("pbcopy");
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    let mut command = std::process::Command::new("wl-copy");
+
+    let mut clipboard = command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("Failed to start OS clipboard writer: {}", e))?;
+    clipboard
+        .stdin
+        .take()
+        .ok_or_else(|| "OS clipboard writer did not open stdin".to_string())?
+        .write_all(content.as_bytes())
+        .map_err(|e| format!("Failed to write gateway configuration to clipboard: {}", e))?;
+    let status = clipboard
+        .wait()
+        .map_err(|e| format!("Failed to wait for OS clipboard writer: {}", e))?;
+    if !status.success() {
+        return Err(format!("OS clipboard writer failed with status {}", status));
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn get_provider_health(
     supervisor: tauri::State<'_, SidecarSupervisor>,
     client: tauri::State<'_, SignedAdminClient>,
@@ -4296,18 +4356,6 @@ pub async fn get_provider_health(
         "status_code": status,
         "data": val
     }))
-}
-
-#[tauri::command]
-pub fn get_gateway_token(
-    supervisor: tauri::State<'_, SidecarSupervisor>,
-) -> Result<String, String> {
-    let guard = supervisor.state.lock().unwrap();
-    if guard.gateway_token.is_empty() {
-        Err("Gateway token not yet initialized".into())
-    } else {
-        Ok(guard.gateway_token.clone())
-    }
 }
 
 #[tauri::command]
@@ -4498,7 +4546,7 @@ pub async fn restart_litellm_sidecar(
         terminate_sidecar_tree(child, old_pid, old_job).await?;
     }
 
-    match spawn_litellm_sidecar(app, supervisor.clone()).await {
+    match spawn_litellm_sidecar(app, supervisor.inner().state.clone()).await {
         Ok(new_child) => {
             let mut guard = supervisor.state.lock().unwrap();
             let port = guard.bound_port;
@@ -4563,7 +4611,7 @@ pub async fn apply_air_gapped_mode(
         terminate_sidecar_tree(child, old_pid, old_job).await?;
     }
 
-    match spawn_litellm_sidecar(app, supervisor.clone()).await {
+    match spawn_litellm_sidecar(app, supervisor.inner().state.clone()).await {
         Ok(new_child) => {
             let mut guard = supervisor.state.lock().unwrap();
             guard.child = Some(new_child);
@@ -4641,15 +4689,34 @@ pub fn save_litellm_config(app: AppHandle, yaml_content: String) -> Result<(), S
 }
 
 #[tauri::command]
-pub fn validate_provider_key(
+pub async fn validate_provider_key(
+    supervisor: tauri::State<'_, SidecarSupervisor>,
+    client: tauri::State<'_, SignedAdminClient>,
     provider: String,
-    _api_key: String,
+    api_key: String,
 ) -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({
-        "valid": true,
+    let request = serde_json::to_vec(&serde_json::json!({
         "provider": provider,
-        "message": "Key validated successfully"
+        "apiKey": api_key,
     }))
+    .map_err(|e| format!("Failed to encode provider validation request: {}", e))?;
+    let (body, status) = client
+        .execute_signed_request(
+            &supervisor,
+            reqwest::Method::POST,
+            "/admin/providers/validate-key",
+            Some(request),
+        )
+        .await?;
+    let result: serde_json::Value = serde_json::from_slice(&body)
+        .map_err(|e| format!("Failed to decode provider validation response: {}", e))?;
+    if !(200..500).contains(&status) {
+        return Err(format!(
+            "Provider validation service returned HTTP status {}",
+            status
+        ));
+    }
+    Ok(result)
 }
 
 #[tauri::command]
@@ -5042,21 +5109,89 @@ pub fn save_routing_metadata(app: AppHandle, metadata: serde_json::Value) -> Res
 }
 
 #[tauri::command]
-pub fn set_auto_start_on_boot(enabled: bool) -> Result<(), String> {
+pub fn set_auto_start_on_boot(app: AppHandle, enabled: bool) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        println!("[TetherMesh] set_auto_start_on_boot: {}", enabled);
+        let executable = std::env::current_exe()
+            .map_err(|e| format!("Failed to resolve application executable: {}", e))?;
+        let app_name = app.package_info().name.clone();
+        let status = if enabled {
+            std::process::Command::new("reg.exe")
+                .args([
+                    "add",
+                    r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+                    "/v",
+                    &app_name,
+                    "/t",
+                    "REG_SZ",
+                    "/d",
+                    &format!("\"{}\"", executable.display()),
+                    "/f",
+                ])
+                .status()
+        } else {
+            std::process::Command::new("reg.exe")
+                .args([
+                    "delete",
+                    r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+                    "/v",
+                    &app_name,
+                    "/f",
+                ])
+                .status()
+        }
+        .map_err(|e| format!("Failed to update Windows startup setting: {}", e))?;
+        if !status.success() {
+            return Err(format!(
+                "Windows startup setting command failed with status {}",
+                status
+            ));
+        }
+        Ok(())
     }
-    Ok(())
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (app, enabled);
+        Err("Automatic startup is not implemented for this operating system".to_string())
+    }
 }
 
 #[tauri::command]
 pub fn open_os_startup_settings() -> Result<(), String> {
     #[cfg(target_os = "windows")]
-    let _ = std::process::Command::new("cmd")
-        .args(&["/c", "start", "ms-settings:startupapps"])
-        .spawn();
-    Ok(())
+    {
+        use std::ffi::OsStr;
+        use std::os::windows::ffi::OsStrExt;
+        use std::ptr;
+        use windows_sys::Win32::UI::Shell::ShellExecuteW;
+        use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+        let target: Vec<u16> = OsStr::new("ms-settings:startupapps")
+            .encode_wide()
+            .chain(Some(0))
+            .collect();
+        let result = unsafe {
+            ShellExecuteW(
+                ptr::null_mut(),
+                ptr::null(),
+                target.as_ptr(),
+                ptr::null(),
+                ptr::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+        if result as isize <= 32 {
+            return Err(format!(
+                "Failed to open Windows startup settings (ShellExecuteW code {})",
+                result as isize
+            ));
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Startup settings are not available for this operating system".to_string())
+    }
 }
 
 #[tauri::command]
@@ -5116,8 +5251,8 @@ pub fn run() {
             get_diagnostic_status,
             get_mcp_catalog,
             get_proxy_status,
+            copy_gateway_environment,
             get_provider_health,
-            get_gateway_token,
             open_external_url,
             update_budget_limits,
             reset_spend_data,
@@ -5151,9 +5286,9 @@ pub fn run() {
             let app_data_dir = config_path.parent().unwrap_or(&config_path);
             let persisted_air_gapped = load_persisted_air_gapped_state(app_data_dir);
 
-            let supervisor = app.state::<SidecarSupervisor>();
+            let supervisor_state = app.state::<SidecarSupervisor>().inner().state.clone();
             {
-                let mut guard = supervisor.state.lock().unwrap();
+                let mut guard = supervisor_state.lock().unwrap();
                 guard.is_air_gapped = persisted_air_gapped;
             }
 
@@ -5162,11 +5297,10 @@ pub fn run() {
                 persisted_air_gapped
             );
             let app_handle = app.handle().clone();
-            let sup = supervisor.clone();
             tauri::async_runtime::spawn(async move {
-                match spawn_litellm_sidecar(app_handle, sup.clone()).await {
+                match spawn_litellm_sidecar(app_handle, supervisor_state.clone()).await {
                     Ok(child) => {
-                        let mut guard = sup.state.lock().unwrap();
+                        let mut guard = supervisor_state.lock().unwrap();
                         guard.child = Some(child);
                     }
                     Err(e) => {
@@ -5202,7 +5336,12 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        constant_time_eq_hex, sha256_hex, validate_external_url, validate_numeric_loopback_url,
+        BudgetLimitsPayload, DesiredToolState, ExpectedRevision, ToolAssignmentState,
+        ToolCredentialMutation, ToolSyncStatus, TriState,
+    };
+    use std::fmt::Write;
 
     #[tauri::command]
     fn ipc_contract_probe(

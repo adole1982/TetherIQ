@@ -26,6 +26,7 @@ import sqlite3
 import re
 import ipaddress
 import socket
+import http.client
 import urllib.parse
 from collections import deque
 from datetime import datetime
@@ -3529,6 +3530,42 @@ async def get_admin_security_status():
     )
 
 
+def start_readiness_announcer(bound_port, config_sha256):
+    """Announce only after the real LiteLLM-backed ASGI server answers readiness."""
+    ready_msg = json.dumps({
+        "port": bound_port,
+        "instance_id": TETHER_INSTANCE_ID,
+        "generation": TETHER_GENERATION,
+        "config_hash": config_sha256,
+        "air_gapped": bool(AIR_GAPPED_MODE)
+    })
+
+    def wait_for_server():
+        deadline = time.monotonic() + 14.0
+        while time.monotonic() < deadline:
+            connection = None
+            try:
+                connection = http.client.HTTPConnection("127.0.0.1", bound_port, timeout=0.5)
+                connection.request("GET", "/health/readiness")
+                response = connection.getresponse()
+                payload = json.loads(response.read(4096).decode("utf-8"))
+                if response.status == 200 and payload.get("status") == "ready":
+                    print(f"[TETHER_READY]:{ready_msg}", flush=True)
+                    return
+            except Exception:
+                pass
+            finally:
+                if connection is not None:
+                    connection.close()
+            time.sleep(0.05)
+
+    threading.Thread(
+        target=wait_for_server,
+        daemon=True,
+        name="ReadinessAnnouncerThread",
+    ).start()
+
+
 def main():
     start_parent_watchdog()
     parser = argparse.ArgumentParser(description="TetherMesh LiteLLM Sidecar")
@@ -3536,6 +3573,10 @@ def main():
     parser.add_argument("--host", type=str, default="127.0.0.1", help="Host address to bind")
     parser.add_argument("--config", type=str, default=None, help="Path to litellm_config.yaml")
     args, unknown = parser.parse_known_args()
+
+    if args.host != "127.0.0.1":
+        print("[TetherMesh FATAL] Sidecar must bind to numeric IPv4 loopback 127.0.0.1.", file=sys.stderr, flush=True)
+        sys.exit(1)
 
     # Fail closed in supervised production mode if required secrets are missing
     if os.environ.get("TETHER_SUPERVISED") == "1":
@@ -3580,28 +3621,17 @@ def main():
         sock.bind((args.host, 0))
         sock.listen(128)
         bound_port = sock.getsockname()[1]
-        ready_msg = json.dumps({
-            "port": bound_port,
-            "instance_id": TETHER_INSTANCE_ID,
-            "generation": TETHER_GENERATION,
-            "config_hash": config_sha256,
-            "air_gapped": bool(AIR_GAPPED_MODE)
-        })
-        print(f"[TETHER_READY]:{ready_msg}", flush=True)
+        start_readiness_announcer(bound_port, config_sha256)
         print(f"[TetherMesh] LiteLLM Sidecar running on http://{args.host}:{bound_port} (config: {os.environ.get('LITELLM_CONFIG_PATH')})", flush=True)
         config = uvicorn.Config(app, host=None, port=None, log_level="info", loop="asyncio")
         server = uvicorn.Server(config)
         server.run(sockets=[sock])
     else:
         bound_port = args.port
-        ready_msg = json.dumps({
-            "port": bound_port,
-            "instance_id": TETHER_INSTANCE_ID,
-            "generation": TETHER_GENERATION,
-            "config_hash": config_sha256,
-            "air_gapped": bool(AIR_GAPPED_MODE)
-        })
-        print(f"[TETHER_READY]:{ready_msg}", flush=True)
+        if bound_port < 1025 or bound_port > 65535:
+            print("[TetherMesh FATAL] Explicit sidecar port must be between 1025 and 65535.", file=sys.stderr, flush=True)
+            sys.exit(1)
+        start_readiness_announcer(bound_port, config_sha256)
         print(f"[TetherMesh] LiteLLM Sidecar running on http://{args.host}:{bound_port} (config: {os.environ.get('LITELLM_CONFIG_PATH')})", flush=True)
         uvicorn.run(app, host=args.host, port=args.port, log_level="info", loop="asyncio", workers=1)
 

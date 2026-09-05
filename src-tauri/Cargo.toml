@@ -35,3 +35,6 @@ windows-sys = { version = "0.59", features = ["Win32_Security_Cryptography", "Wi
 
 [target.'cfg(not(windows))'.dependencies]
 libc = "0.2"
+
+[dev-dependencies]
+tauri = { version = "2.0.0", features = ["test"] }
