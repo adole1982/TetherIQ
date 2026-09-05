@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { TelemetryPoint, SpendBudget, ConnectedAgent } from '../types/telemetry';
-import { ProviderConfig, FallbackChain, VirtualModelAlias } from '../types/routing';
+import { ProviderConfig, FallbackChain, VirtualModelAlias, LocalMeshStatus } from '../types/routing';
 import { McpToolDefinition, InstalledToolState, TargetClientId } from '../types/tools';
 import { ActivityTrace } from '../types/traces';
 import { AppSettings, ClientSyncResult } from '../types/config';
@@ -13,7 +13,20 @@ import {
   fetchLiteLLMSpend,
   persistedToStoreBudget,
   storeBudgetToPersisted,
+  parseDecimalToMicroUsd,
 } from '../services/budgetPersistence';
+import {
+  listCredentialSummaries,
+  loadRoutingMetadata,
+  saveRoutingMetadata,
+  purgeLegacyWebStorage,
+  purgeLegacyLocalStorageSecrets,
+  mutateToolCredentials,
+  listToolCredentialSummaries,
+  revokeTool,
+  loadNativeToolAssignments,
+  saveNativeToolAssignments,
+} from '../services/vaultPersistence';
 
 export type NavTab = 'hud' | 'matrix' | 'tools' | 'traces' | 'agents' | 'quickstart' | 'settings';
 
@@ -35,6 +48,7 @@ interface TetherState {
   toggleProxy: () => void;
   proxyPort: number;
   proxyHost: string;
+  gatewayToken: string | null;
   appVersion: string;
   fetchGatewayHealth: () => Promise<void>;
 
@@ -44,7 +58,7 @@ interface TetherState {
   currentLatencyMs: number;
   currentBurnRatePerHour: number;
   budget: SpendBudget;
-  updateBudgetLimits: (daily: number, monthly: number) => Promise<void>;
+  updateBudgetLimits: (daily: number | string | null, monthly: number | string | null) => Promise<void>;
   resetCircuitBreaker: () => Promise<void>;
   triggerSpend: (amount: number, tokens: number) => void;
 
@@ -55,6 +69,10 @@ interface TetherState {
   updateFallbackChain: (chainId: string, nodes: any[]) => void;
   virtualAliases: VirtualModelAlias[];
   updateVirtualAlias: (alias: string, targetChainId: string) => void;
+  isAirGappedMode: boolean;
+  toggleAirGappedMode: () => Promise<void>;
+  localMeshStatus: LocalMeshStatus | null;
+  scanLocalMesh: () => Promise<void>;
 
   // MCP Tools & Marketplace
   mcpCatalog: McpToolDefinition[];
@@ -62,6 +80,7 @@ interface TetherState {
   selectedToolForDrawer: McpToolDefinition | null;
   setSelectedToolForDrawer: (tool: McpToolDefinition | null) => void;
   saveToolConfig: (toolId: string, credentials: Record<string, string>, targetClients: TargetClientId[], isEnabled: boolean) => Promise<void>;
+  revokeToolConfig: (toolId: string) => Promise<void>;
   toggleToolEnabled: (toolId: string) => void;
   syncAllTools: () => Promise<ClientSyncResult[]>;
   syncResults: ClientSyncResult[];
@@ -87,11 +106,13 @@ interface TetherState {
 }
 
 const INITIAL_PROVIDERS: ProviderConfig[] = [
-  { id: 'anthropic', name: 'Anthropic Direct', isEnabled: true, billingMode: 'pay-per-token', apiKey: 'sk-ant-api03-live-sample-tether-992384', isHealthy: true, lastPingMs: 42 },
-  { id: 'openai', name: 'OpenAI Direct', isEnabled: true, billingMode: 'pay-per-token', apiKey: 'sk-proj-sample-key-tether-992134', isHealthy: true, lastPingMs: 65 },
-  { id: 'bedrock', name: 'AWS Bedrock', isEnabled: true, billingMode: 'pay-per-token', awsRegion: 'us-east-1', awsAccessKey: 'AKIAIOSFODNN7EXAMPLE', awsSecretKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', isHealthy: true, lastPingMs: 78 },
+  { id: 'anthropic', name: 'Anthropic Direct', isEnabled: true, billingMode: 'pay-per-token', isHealthy: true, lastPingMs: 42 },
+  { id: 'openai', name: 'OpenAI Direct', isEnabled: true, billingMode: 'pay-per-token', isHealthy: true, lastPingMs: 65 },
+  { id: 'openrouter', name: 'OpenRouter Unified', isEnabled: true, billingMode: 'pay-per-token', isHealthy: false, lastPingMs: 0 },
+  { id: 'deepseek', name: 'DeepSeek Direct', isEnabled: true, billingMode: 'pay-per-token', isHealthy: false, lastPingMs: 0 },
+  { id: 'bedrock', name: 'AWS Bedrock', isEnabled: true, billingMode: 'pay-per-token', awsRegion: 'us-east-1', isHealthy: true, lastPingMs: 78 },
   { id: 'vertex', name: 'Google Vertex AI', isEnabled: true, billingMode: 'subscription-unlimited', vertexProjectId: 'gcp-prod-analytics', vertexLocation: 'us-central1', isHealthy: true, lastPingMs: 55 },
-  { id: 'groq', name: 'Groq Cloud', isEnabled: true, billingMode: 'pay-per-token', apiKey: 'gsk_sample_live_key_9934', isHealthy: true, lastPingMs: 18 },
+  { id: 'groq', name: 'Groq Cloud', isEnabled: true, billingMode: 'pay-per-token', isHealthy: true, lastPingMs: 18 },
   { id: 'ollama', name: 'Local Ollama (11434)', isEnabled: true, billingMode: 'subscription-unlimited', baseUrl: 'http://localhost:11434', isHealthy: true, lastPingMs: 4 }
 ];
 
@@ -127,7 +148,9 @@ const INITIAL_INSTALLED_TOOLS: InstalledToolState[] = [
   {
     toolId: 'github',
     isEnabled: true,
-    credentials: { GITHUB_PERSONAL_ACCESS_TOKEN: 'ghp_liveDevDemoKey7788990011223344' },
+    isConfigured: false,
+    configuredFields: [],
+    fieldHints: {},
     targetClients: ['cursor', 'claude-code', 'windsurf', 'antigravity'],
     syncStatus: 'synced',
     lastSyncedAt: Date.now() - 3600000
@@ -135,7 +158,9 @@ const INITIAL_INSTALLED_TOOLS: InstalledToolState[] = [
   {
     toolId: 'postgres',
     isEnabled: true,
-    credentials: { POSTGRES_CONNECTION_STRING: 'postgresql://postgres:postgres@localhost:5432/app_development' },
+    isConfigured: false,
+    configuredFields: [],
+    fieldHints: {},
     targetClients: ['cursor', 'claude-code', 'devin'],
     syncStatus: 'synced',
     lastSyncedAt: Date.now() - 3600000
@@ -143,7 +168,9 @@ const INITIAL_INSTALLED_TOOLS: InstalledToolState[] = [
   {
     toolId: 'databricks',
     isEnabled: true,
-    credentials: { DATABRICKS_HOST: 'https://dbc-12345.cloud.databricks.com', DATABRICKS_TOKEN: 'dapi1234567890abcdef' },
+    isConfigured: false,
+    configuredFields: [],
+    fieldHints: {},
     targetClients: ['claude-code', 'windsurf', 'antigravity'],
     syncStatus: 'synced',
     lastSyncedAt: Date.now() - 1800000
@@ -151,7 +178,9 @@ const INITIAL_INSTALLED_TOOLS: InstalledToolState[] = [
   {
     toolId: 'brave-search',
     isEnabled: true,
-    credentials: { BRAVE_API_KEY: 'BSA_sample_live_token_7788' },
+    isConfigured: false,
+    configuredFields: [],
+    fieldHints: {},
     targetClients: ['cursor', 'claude-code', 'devin', 'windsurf'],
     syncStatus: 'synced',
     lastSyncedAt: Date.now() - 7200000
@@ -330,9 +359,30 @@ export const useTetherStore = create<TetherState>((set, get) => ({
   toggleProxy: () => set((state) => ({ isProxyRunning: !state.isProxyRunning })),
   proxyPort: 4000,
   proxyHost: '127.0.0.1',
+  gatewayToken: null,
   appVersion: 'v1.0.0',
 
   fetchGatewayHealth: async () => {
+    // 0. Ensure gateway token and authoritative native MCP catalog are populated from Tauri backend
+    let currentGatewayToken = get().gatewayToken;
+
+    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        if (!currentGatewayToken) {
+          const diag = await invoke<any>('get_gateway_diagnostics');
+          if (diag) {
+            currentGatewayToken = diag.gateway_token;
+            set({ gatewayToken: diag.gateway_token });
+          }
+        }
+        const nativeCatalog = await invoke<any[]>('get_mcp_catalog');
+        if (nativeCatalog && nativeCatalog.length > 0) {
+          set({ mcpCatalog: nativeCatalog });
+        }
+      } catch {}
+    }
+
     // Start real-time telemetry stream on first health check
     if (!isTelemetryInitialized) {
       isTelemetryInitialized = true;
@@ -383,45 +433,77 @@ export const useTetherStore = create<TetherState>((set, get) => ({
     }
 
     try {
-      // 1. Check LiteLLM liveness
-      const healthRes = await fetch('http://127.0.0.1:4000/health/liveliness');
-      if (!healthRes.ok) {
+      const isTauri = typeof window !== 'undefined' && (window as any).__TAURI__;
+      let isRunning = true;
+      let proxyPort = 4000;
+
+      if (isTauri) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          const status = await invoke<{ is_running: boolean; port: number }>('get_proxy_status');
+          isRunning = status.is_running;
+          if (status.port) proxyPort = status.port;
+        } catch {
+          isRunning = false;
+        }
+      }
+
+      if (!isRunning) {
         set({ isProxyRunning: false });
         return;
       }
 
-      set({ isProxyRunning: true });
+      set({ isProxyRunning: true, proxyPort });
 
-      // 2. Fetch spend data from LiteLLM
-      const spendData = await fetchLiteLLMSpend('http://127.0.0.1:4000');
+      // 2. Fetch spend data from LiteLLM database via native IPC
+      const spendData = await fetchLiteLLMSpend();
 
-      // 3. Load persisted budget baseline (for monthly totals and limits)
-      const persisted = await loadPersistedBudget();
-
-      // 4. Merge: LiteLLM's daily spend + persisted monthly accumulation
-      const dailySpend = spendData.dailySpend || persisted.dailySpend;
-      const monthlySpend = persisted.monthlySpend + Math.max(0, spendData.dailySpend - persisted.dailySpend);
-      const isTripped = dailySpend >= persisted.dailyLimit;
-
-      // 5. Update store
+      // 3. Update store with authoritative database values (including explicit null for unlimited)
       set((state) => ({
         budget: {
           ...state.budget,
-          currentDailySpend: dailySpend,
-          currentMonthlySpend: monthlySpend,
-          isCircuitBreakerTripped: isTripped,
+          currentDailySpend: spendData.dailySpend,
+          currentMonthlySpend: spendData.monthlySpend,
+          dailyLimit: spendData.dailyLimit !== undefined ? spendData.dailyLimit : state.budget.dailyLimit,
+          monthlyLimit: spendData.monthlyLimit !== undefined ? spendData.monthlyLimit : state.budget.monthlyLimit,
+          isCircuitBreakerTripped: spendData.isCircuitBreakerTripped,
         }
       }));
 
-      // 6. Persist updated budget to disk
-      const updatedPersisted = {
-        ...persisted,
-        dailySpend,
-        monthlySpend,
-        isCircuitBreakerTripped: isTripped,
-        totalTokensProcessed: persisted.totalTokensProcessed + spendData.totalTokens,
-      };
-      await savePersistedBudget(updatedPersisted);
+      // 4. Update non-authoritative local cache
+      try {
+        const persisted = await loadPersistedBudget();
+        await savePersistedBudget({
+          ...persisted,
+          dailySpend: spendData.dailySpend,
+          monthlySpend: spendData.monthlySpend,
+          isCircuitBreakerTripped: spendData.isCircuitBreakerTripped,
+          totalTokensProcessed: persisted.totalTokensProcessed + spendData.totalTokens,
+        });
+      } catch {}
+
+      // 7. Probe real provider health and latency
+      try {
+        if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+          const { invoke } = await import('@tauri-apps/api/core');
+          const provData = await invoke<any>('get_provider_health');
+          if (provData && provData.providers) {
+            set((state) => ({
+              providers: state.providers.map((p) => {
+                const live = provData.providers[p.id];
+                if (live) {
+                  return {
+                    ...p,
+                    isHealthy: live.isHealthy,
+                    lastPingMs: live.latencyMs > 0 ? live.latencyMs : p.lastPingMs,
+                  };
+                }
+                return p;
+              })
+            }));
+          }
+        }
+      } catch {}
 
     } catch {
       // Gateway not responding — sidecar may still be starting up
@@ -443,57 +525,107 @@ export const useTetherStore = create<TetherState>((set, get) => ({
     lastResetDate: new Date().toISOString().split('T')[0]
   },
   updateBudgetLimits: async (daily, monthly) => {
-    set((state) => ({
-      budget: { ...state.budget, dailyLimit: daily, monthlyLimit: monthly }
-    }));
+    const dailyMicros = parseDecimalToMicroUsd(daily);
+    const monthlyMicros = parseDecimalToMicroUsd(monthly);
 
-    // Persist new limits to local budget file
-    try {
-      const persisted = await loadPersistedBudget();
-      await savePersistedBudget({
-        ...persisted,
-        dailyLimit: daily,
-        monthlyLimit: monthly,
+    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const response = await invoke<any>('update_budget_limits', {
+        limits: {
+          dailyLimitMicrousd: dailyMicros,
+          monthlyLimitMicrousd: monthlyMicros,
+        },
       });
-    } catch {}
 
-    // Regenerate LiteLLM config with new max_budget
-    // Note: LiteLLM picks up config changes on restart.
-    // For live updates, the sidecar would need to be restarted.
-    try {
-      const state = get();
-      const configYaml = generateLiteLLMConfig({
-        providers: state.providers,
-        fallbackChains: state.fallbackChains,
-        virtualAliases: state.virtualAliases,
-        budget: { ...state.budget, dailyLimit: daily, monthlyLimit: monthly },
-      });
-      console.log('[TetherStore] Generated LiteLLM config for budget update');
-      // Write config via Tauri IPC if available
-      if (window.__TAURI__) {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const paths = await invoke<{ app_data_dir: string }>('get_system_paths');
-        await invoke('write_system_config_file', {
-          filePath: `${paths.app_data_dir}\\TetherMesh\\litellm_config.yaml`,
-          content: configYaml,
-          createBackup: true,
+      const fallbackDaily = dailyMicros !== null ? dailyMicros / 1_000_000 : null;
+      const fallbackMonthly = monthlyMicros !== null ? monthlyMicros / 1_000_000 : null;
+
+      const committedDaily: number | null = response.daily_limit_usd !== undefined && response.daily_limit_usd !== null
+        ? Number(response.daily_limit_usd)
+        : (response.dailyLimit !== undefined && response.dailyLimit !== null ? Number(response.dailyLimit) : fallbackDaily);
+      const committedMonthly: number | null = response.monthly_limit_usd !== undefined && response.monthly_limit_usd !== null
+        ? Number(response.monthly_limit_usd)
+        : (response.monthlyLimit !== undefined && response.monthlyLimit !== null ? Number(response.monthlyLimit) : fallbackMonthly);
+      const isTripped = Boolean(response.is_tripped ?? response.isTripped);
+
+      // Only update local store state after authoritative database commit succeeds
+      set((state) => ({
+        budget: {
+          ...state.budget,
+          dailyLimit: committedDaily,
+          monthlyLimit: committedMonthly,
+          isCircuitBreakerTripped: isTripped,
+        },
+      }));
+
+      // Post-success non-authoritative local cache
+      try {
+        const persisted = await loadPersistedBudget();
+        await savePersistedBudget({
+          ...persisted,
+          dailyLimit: committedDaily,
+          monthlyLimit: committedMonthly,
+          isCircuitBreakerTripped: isTripped,
         });
-      }
-    } catch (err) {
-      console.error('[TetherStore] Failed to regenerate LiteLLM config:', err);
+      } catch {}
+      console.log('[TetherStore] Authoritatively synchronized budget limits via native IPC');
+    } else {
+      // Non-Tauri browser development mode
+      const fallbackDaily = dailyMicros !== null ? dailyMicros / 1_000_000 : null;
+      const fallbackMonthly = monthlyMicros !== null ? monthlyMicros / 1_000_000 : null;
+      set((state) => ({
+        budget: { ...state.budget, dailyLimit: fallbackDaily, monthlyLimit: fallbackMonthly }
+      }));
+      try {
+        const persisted = await loadPersistedBudget();
+        await savePersistedBudget({
+          ...persisted,
+          dailyLimit: fallbackDaily,
+          monthlyLimit: fallbackMonthly,
+        });
+      } catch {}
     }
   },
   resetCircuitBreaker: async () => {
+    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const resp = await invoke<any>('reset_spend_data');
+        if (resp) {
+          const dailySpent = Number(resp.daily_spent_usd ?? resp.dailySpentUsd ?? 0);
+          const monthlySpent = Number(resp.monthly_spent_usd ?? resp.monthlySpentUsd ?? 0);
+          const isTripped = Boolean(resp.is_tripped ?? resp.isTripped ?? false);
+
+          set((state) => ({
+            budget: {
+              ...state.budget,
+              isCircuitBreakerTripped: isTripped,
+              currentDailySpend: dailySpent,
+              currentMonthlySpend: monthlySpent,
+            }
+          }));
+
+          try {
+            const persisted = await loadPersistedBudget();
+            await savePersistedBudget({
+              ...persisted,
+              dailySpend: dailySpent,
+              monthlySpend: monthlySpent,
+              isCircuitBreakerTripped: isTripped,
+            });
+          } catch {}
+          return;
+        }
+      } catch (err) {
+        console.error('[TetherStore] Failed to reset spend data via native IPC:', err);
+        return;
+      }
+    }
+
+    // Web fallback
     set((state) => ({
       budget: { ...state.budget, isCircuitBreakerTripped: false, currentDailySpend: 0 }
     }));
-
-    // Reset LiteLLM's spend tracking
-    try {
-      await fetch('http://127.0.0.1:4000/spend/reset', { method: 'POST' });
-    } catch {}
-
-    // Reset persisted budget
     try {
       const persisted = await loadPersistedBudget();
       await savePersistedBudget({
@@ -504,9 +636,14 @@ export const useTetherStore = create<TetherState>((set, get) => ({
     } catch {}
   },
   triggerSpend: (amount, tokens) => set((state) => {
-    const newDaily = state.budget.currentDailySpend + amount;
-    const newMonthly = state.budget.currentMonthlySpend + amount;
-    const tripped = state.budget.hardStopEnabled && newDaily >= state.budget.dailyLimit;
+    const isAllSubscription = state.providers
+      .filter((p) => p.isEnabled)
+      .every((p) => p.billingMode === 'subscription-unlimited');
+
+    const effectiveAmount = isAllSubscription ? 0 : amount;
+    const newDaily = state.budget.currentDailySpend + effectiveAmount;
+    const newMonthly = state.budget.currentMonthlySpend + effectiveAmount;
+    const tripped = !isAllSubscription && state.budget.hardStopEnabled && state.budget.dailyLimit !== null && newDaily >= state.budget.dailyLimit;
     return {
       budget: {
         ...state.budget,
@@ -519,17 +656,114 @@ export const useTetherStore = create<TetherState>((set, get) => ({
 
   // Providers & Matrix
   providers: INITIAL_PROVIDERS,
-  updateProvider: (id, updates) => set((state) => ({
-    providers: state.providers.map(p => p.id === id ? { ...p, ...updates } : p)
-  })),
+  updateProvider: (id, updates) => {
+    // Strip apiKey so plaintext credentials never persist in React memory
+    const { apiKey, ...cleanUpdates } = updates;
+    set((state) => ({
+      providers: state.providers.map(p => p.id === id ? { ...p, ...cleanUpdates } : p)
+    }));
+  },
   fallbackChains: INITIAL_FALLBACK_CHAINS,
-  updateFallbackChain: (chainId, nodes) => set((state) => ({
-    fallbackChains: state.fallbackChains.map(c => c.id === chainId ? { ...c, nodes } : c)
-  })),
+  updateFallbackChain: (chainId, nodes) => {
+    set((state) => ({
+      fallbackChains: state.fallbackChains.map(c => c.id === chainId ? { ...c, nodes } : c)
+    }));
+    const currentState = get();
+    saveRoutingMetadata({
+      fallbackChains: currentState.fallbackChains,
+      virtualAliases: currentState.virtualAliases,
+    });
+  },
   virtualAliases: INITIAL_VIRTUAL_ALIASES,
-  updateVirtualAlias: (alias, targetChainId) => set((state) => ({
-    virtualAliases: state.virtualAliases.map(a => a.alias === alias ? { ...a, targetChainId } : a)
-  })),
+  updateVirtualAlias: (alias, targetChainId) => {
+    set((state) => ({
+      virtualAliases: state.virtualAliases.map(a => a.alias === alias ? { ...a, targetChainId } : a)
+    }));
+    const currentState = get();
+    saveRoutingMetadata({
+      fallbackChains: currentState.fallbackChains,
+      virtualAliases: currentState.virtualAliases,
+    });
+  },
+
+  // Air-Gapped / Offline Local Mesh State
+  isAirGappedMode: false,
+  localMeshStatus: null,
+  toggleAirGappedMode: async () => {
+    const currentMode = get().isAirGappedMode;
+    const nextMode = !currentMode;
+
+    // In Air-Gapped mode, trigger a local mesh scan first
+    if (nextMode) {
+      await get().scanLocalMesh();
+    }
+
+    // Regenerate YAML configuration for target mode
+    const state = get();
+    const discoveredModels = state.localMeshStatus?.allModelIdentifiers || state.localMeshStatus?.discoveredModels?.map(m => m.name) || [];
+    const configYaml = generateLiteLLMConfig({
+      providers: state.providers,
+      fallbackChains: state.fallbackChains,
+      virtualAliases: state.virtualAliases,
+      budget: state.budget,
+      isAirGappedMode: nextMode,
+      discoveredLocalModels: discoveredModels,
+    });
+
+    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('apply_air_gapped_mode', {
+          enabled: nextMode,
+          newYaml: configYaml,
+          yamlContent: configYaml,
+        });
+        set({ isAirGappedMode: nextMode });
+        console.log(`[TetherStore] Transactionally transitioned to ${nextMode ? 'Air-Gapped' : 'Hybrid'} mode with verified configuration`);
+      } catch (e) {
+        console.error('[TetherStore] Native air-gapped transition failed:', e);
+      }
+    } else {
+      set({ isAirGappedMode: nextMode });
+    }
+  },
+  scanLocalMesh: async () => {
+    try {
+      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const data = await invoke<any>('get_local_mesh_status');
+        if (data) {
+          set({
+            localMeshStatus: {
+              isScanning: false,
+              lastScannedAt: Date.now(),
+              ollamaRunning: data.ollamaRunning,
+              ollamaUrl: data.ollamaUrl,
+              lmStudioRunning: data.lmStudioRunning,
+              lmStudioUrl: data.lmStudioUrl,
+              discoveredModels: data.discoveredModels || [],
+              allModelIdentifiers: data.allModelIdentifiers || []
+            }
+          });
+          return;
+        }
+      }
+    } catch {
+      // Fallback if proxy route isn't up yet
+      set((state) => ({
+        localMeshStatus: state.localMeshStatus || {
+          isScanning: false,
+          lastScannedAt: Date.now(),
+          ollamaRunning: false,
+          ollamaUrl: 'http://127.0.0.1:11434',
+          lmStudioRunning: false,
+          lmStudioUrl: 'http://127.0.0.1:1234',
+          discoveredModels: [],
+          allModelIdentifiers: []
+        }
+      }));
+    }
+  },
 
   // Tools & Marketplace
   mcpCatalog: MCP_CATALOG,
@@ -537,46 +771,112 @@ export const useTetherStore = create<TetherState>((set, get) => ({
   selectedToolForDrawer: null,
   setSelectedToolForDrawer: (tool) => set({ selectedToolForDrawer: tool }),
   saveToolConfig: async (toolId, credentials, targetClients, isEnabled) => {
+    // 1. Build typed mutations and write directly to OS Vault
+    const mutations: import('../types/tools').CredentialFieldMutation[] = Object.entries(credentials).map(([k, v]) => ({
+      field: k,
+      operation: v && v.trim() ? 'set' : 'delete',
+      value: v
+    }));
+
+    const summary = await mutateToolCredentials(toolId, mutations);
+    const isConfigured = summary ? summary.configured : false;
+    const configuredFields = summary ? summary.configured_fields : [];
+    const fieldHints = summary ? summary.display_hints : {};
+
+    let updatedList: InstalledToolState[] = [];
     set((state) => {
       const existingIdx = state.installedTools.findIndex(t => t.toolId === toolId);
-      const updatedList = [...state.installedTools];
+      updatedList = [...state.installedTools];
+      const entry: InstalledToolState = {
+        toolId,
+        isEnabled,
+        isConfigured,
+        configuredFields,
+        fieldHints,
+        targetClients,
+        lastSyncedAt: Date.now(),
+        syncStatus: 'synced'
+      };
       if (existingIdx >= 0) {
-        updatedList[existingIdx] = {
-          toolId,
-          isEnabled,
-          credentials,
-          targetClients,
-          lastSyncedAt: Date.now(),
-          syncStatus: 'synced'
-        };
+        updatedList[existingIdx] = entry;
       } else {
-        updatedList.push({
-          toolId,
-          isEnabled,
-          credentials,
-          targetClients,
-          lastSyncedAt: Date.now(),
-          syncStatus: 'synced'
-        });
+        updatedList.push(entry);
       }
       return { installedTools: updatedList, selectedToolForDrawer: null };
     });
 
+    // 2. Persist assignments natively
+    await saveNativeToolAssignments(
+      updatedList.map(t => ({
+        tool_id: t.toolId,
+        is_enabled: t.isEnabled,
+        target_clients: t.targetClients
+      }))
+    );
+
+    // 3. Sync all tools
+    const syncRes = await get().syncAllTools();
+    const failedSync = syncRes.find(r => !r.isSuccess);
+    if (failedSync) {
+      set((state) => ({
+        installedTools: state.installedTools.map(t =>
+          t.toolId === toolId ? { ...t, syncStatus: 'error', errorMessage: failedSync.message } : t
+        )
+      }));
+      throw new Error(failedSync.message);
+    }
+  },
+  revokeToolConfig: async (toolId: string) => {
+    const revResult = await revokeTool(toolId);
+    if (!revResult.success) {
+      throw new Error(revResult.error || 'Failed to prune tool from all client configuration files');
+    }
+
+    let updatedList: InstalledToolState[] = [];
+    set((state) => {
+      updatedList = state.installedTools.filter(t => t.toolId !== toolId);
+      return {
+        installedTools: updatedList,
+        selectedToolForDrawer: null
+      };
+    });
+
+    await saveNativeToolAssignments(
+      updatedList.map(t => ({
+        tool_id: t.toolId,
+        is_enabled: t.isEnabled,
+        target_clients: t.targetClients
+      }))
+    );
     await get().syncAllTools();
   },
-  toggleToolEnabled: (toolId) => {
-    set((state) => ({
-      installedTools: state.installedTools.map(t => 
+  toggleToolEnabled: async (toolId) => {
+    let updatedList: InstalledToolState[] = [];
+    set((state) => {
+      updatedList = state.installedTools.map(t => 
         t.toolId === toolId ? { ...t, isEnabled: !t.isEnabled } : t
-      )
-    }));
-    get().syncAllTools();
+      );
+      return { installedTools: updatedList };
+    });
+
+    const saved = await saveNativeToolAssignments(
+      updatedList.map(t => ({
+        tool_id: t.toolId,
+        is_enabled: t.isEnabled,
+        target_clients: t.targetClients
+      }))
+    );
+    if (!saved) {
+      console.error('[Store] Failed to persist tool assignments to native storage');
+    }
+    await get().syncAllTools();
   },
   syncResults: [],
   syncAllTools: async () => {
     const results = await ConfigSyncService.syncToolsToTargetClients(
       get().installedTools,
-      get().mcpCatalog
+      get().mcpCatalog,
+      { writeToDisk: true, createBackups: true }
     );
     set({ syncResults: results });
     return results;
@@ -630,3 +930,87 @@ export const useTetherStore = create<TetherState>((set, get) => ({
     settings: { ...state.settings, ...updates }
   }))
 }));
+
+// Initialize persisted vault, budget, and onboarding state
+if (typeof window !== 'undefined') {
+  // 0. Synchronous startup purge of Web Storage (localStorage & sessionStorage)
+  purgeLegacyWebStorage();
+
+  (async () => {
+    try {
+      // 1. Check onboarding state
+      const onboarded = localStorage.getItem('tethermesh_onboarded');
+      if (!onboarded) {
+        useTetherStore.setState({ isQuickstartOpen: true });
+      }
+
+      // 2a. Load credential summaries from OS vault
+      const summaries = await listCredentialSummaries();
+      if (summaries && summaries.length > 0) {
+        const configuredMap = new Map(summaries.map(s => [s.provider, s.configured]));
+        useTetherStore.setState((state) => ({
+          providers: state.providers.map(p => ({
+            ...p,
+            isHealthy: configuredMap.get(p.id) ?? p.isHealthy
+          }))
+        }));
+      }
+
+      // 2b. Load tool assignments & credential summaries from native storage
+      const nativeAssignments = await loadNativeToolAssignments();
+      const toolSummaries = await listToolCredentialSummaries();
+      const toolSummaryMap = new Map((toolSummaries || []).map(s => [s.tool_id, s]));
+
+      if (nativeAssignments && nativeAssignments.length > 0) {
+        const installed: InstalledToolState[] = nativeAssignments.map(a => {
+          const sum = toolSummaryMap.get(a.tool_id);
+          return {
+            toolId: a.tool_id,
+            isEnabled: a.is_enabled,
+            targetClients: a.target_clients,
+            isConfigured: sum ? sum.configured : false,
+            configuredFields: sum ? sum.configured_fields : [],
+            fieldHints: sum ? sum.display_hints : {},
+            lastSyncedAt: Date.now(),
+            syncStatus: 'synced'
+          };
+        });
+        useTetherStore.setState({ installedTools: installed });
+      } else if (toolSummaries && toolSummaries.length > 0) {
+        useTetherStore.setState((state) => ({
+          installedTools: state.installedTools.map(t => {
+            const sum = toolSummaryMap.get(t.toolId);
+            if (sum) {
+              return {
+                ...t,
+                isConfigured: sum.configured,
+                configuredFields: sum.configured_fields,
+                fieldHints: sum.display_hints
+              };
+            }
+            return t;
+          })
+        }));
+      }
+
+      // 3. Load non-secret routing metadata
+      const routing = await loadRoutingMetadata();
+      if (routing) {
+        useTetherStore.setState((state) => ({
+          fallbackChains: routing.fallback_chains || state.fallbackChains,
+          virtualAliases: routing.virtual_aliases || state.virtualAliases,
+        }));
+      }
+
+      // 4. Load budget from disk/sidecar SQLite
+      const budget = await loadPersistedBudget();
+      if (budget) {
+        useTetherStore.setState({
+          budget: persistedToStoreBudget(budget),
+        });
+      }
+    } catch (e) {
+      console.error('[TetherStore] Initialization error:', e);
+    }
+  })();
+}

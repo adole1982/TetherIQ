@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Grid, 
   Search, 
@@ -11,7 +11,12 @@ import {
   FileText, 
   ShieldCheck, 
   ExternalLink,
-  Sliders
+  Sliders,
+  AlertTriangle,
+  Info,
+  Loader2,
+  Download,
+  CheckCircle2
 } from 'lucide-react';
 import { useTetherStore } from '../../store/useTetherStore';
 import { McpToolDefinition, ToolCategory } from '../../types/tools';
@@ -30,6 +35,49 @@ export const ToolMarketplace: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [hasNpxChecked, setHasNpxChecked] = useState<boolean | null>(null);
+  const [nodeVersion, setNodeVersion] = useState<string | null>(null);
+  const [isInstallingNode, setIsInstallingNode] = useState(false);
+  const [installMessage, setInstallMessage] = useState<string | null>(null);
+
+  const checkRuntime = () => {
+    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      import('@tauri-apps/api/core').then(({ invoke }) => {
+        invoke<{ has_npx: boolean; has_node: boolean; node_version?: string }>('check_runtime_environment')
+          .then((res) => {
+            const ok = Boolean(res.has_npx || res.has_node);
+            setHasNpxChecked(ok);
+            if (res.node_version) setNodeVersion(res.node_version);
+          })
+          .catch(() => setHasNpxChecked(true));
+      });
+    }
+  };
+
+  useEffect(() => {
+    checkRuntime();
+  }, []);
+
+  const handleInstallNodeJs = async () => {
+    setIsInstallingNode(true);
+    setInstallMessage('Opening official Node.js download page (https://nodejs.org/en/download)...');
+
+    try {
+      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('open_external_url', { url: 'https://nodejs.org/en/download' });
+      } else {
+        window.open('https://nodejs.org/en/download', '_blank');
+      }
+      setInstallMessage('Please download and run the official LTS installer, then restart TetherMesh.');
+      setTimeout(() => {
+        setIsInstallingNode(false);
+      }, 4000);
+    } catch (err: any) {
+      setInstallMessage(`Please download Node.js LTS manually from https://nodejs.org`);
+      setIsInstallingNode(false);
+    }
+  };
 
   const categories: Array<{ id: string; label: string; count: number }> = [
     { id: 'all', label: 'All MCPs', count: mcpCatalog.length },
@@ -68,7 +116,7 @@ export const ToolMarketplace: React.FC = () => {
           </div>
           <h1 className="text-xl font-extrabold text-white tracking-tight">50+ Official MCP Tool Catalog</h1>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Select any tool, enter credentials in the dynamic wizard, and check off target clients (<span className="text-cyan-300 font-mono">Cursor, Windsurf, Devin, Claude Code, Claude Desktop, Antigravity</span>) for non-destructive multi-file injection. <span className="text-amber-300 font-semibold">Auto-sync coming in V2 • Manual copy for now.</span>
+            Select any tool, enter credentials in the dynamic wizard, and check off target clients (<span className="text-cyan-300 font-mono">Cursor, Windsurf, Devin, Claude Code, Claude Desktop, Antigravity, VS Code, Codex</span>) for 1-click non-destructive configuration sync with automated backups.
           </p>
         </div>
 
@@ -78,9 +126,80 @@ export const ToolMarketplace: React.FC = () => {
           className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs shadow-lg shadow-cyan-500/20 transition-all"
         >
           <Zap className="w-4 h-4 fill-slate-950" />
-          <span>{isSyncing ? 'Copying Config...' : 'Copy Config'}</span>
+          <span>{isSyncing ? 'Writing Real Configs...' : '1-Click Sync All Tools'}</span>
         </button>
       </div>
+
+      {/* Node.js / NPX Prerequisite Warning & 1-Click Installer */}
+      {hasNpxChecked === false && (
+        <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/15 via-slate-900 to-slate-900 border border-amber-500/30 flex items-start justify-between text-xs text-amber-200 gap-4">
+          <div className="flex items-start space-x-3">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2">
+                <span className="font-bold text-amber-300">Node.js Runtime (LTS) Required for MCP Tools</span>
+                <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-[10px] font-mono text-amber-300 border border-amber-500/30">Action Needed</span>
+              </div>
+              <p className="text-slate-300 max-w-2xl leading-relaxed">
+                Most MCP tools (PostgreSQL, GitHub, Slack, Notion) execute locally via <code className="text-cyan-300">npx</code>. Without Node.js installed, coding agents in Cursor or Claude Code cannot launch them.
+              </p>
+              {installMessage && (
+                <div className="p-2 rounded bg-slate-950/80 border border-slate-800 font-mono text-[11px] text-cyan-300 mt-2">
+                  {installMessage}
+                </div>
+              )}
+              <div className="pt-1.5 flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handleInstallNodeJs}
+                  disabled={isInstallingNode}
+                  className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition-all flex items-center space-x-1.5 disabled:opacity-50"
+                >
+                  {isInstallingNode ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Installing Official Node.js LTS via winget...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3.5 h-3.5" />
+                      <span>1-Click Install Official Node.js (winget)</span>
+                    </>
+                  )}
+                </button>
+
+                <a
+                  href="https://nodejs.org/en/download"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-cyan-400 font-semibold hover:underline flex items-center space-x-1"
+                >
+                  <span>Manual Installer (nodejs.org) ↗</span>
+                </a>
+                <span className="text-slate-500">•</span>
+                <span className="text-slate-400">Remote HTTP tools (Stripe, Supabase) work without Node.js</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hasNpxChecked === true && nodeVersion && (
+        <div className="px-4 py-2 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between text-xs text-slate-400">
+          <div className="flex items-center space-x-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span className="text-slate-300 font-medium">Local MCP Runtime Ready:</span>
+            <span className="font-mono text-emerald-300 font-semibold">{nodeVersion} (LTS)</span>
+            <span className="text-slate-600">•</span>
+            <span className="text-slate-400 font-mono">npx available for 35+ tools</span>
+          </div>
+          <button
+            onClick={checkRuntime}
+            className="text-[11px] text-slate-400 hover:text-cyan-400 font-mono underline"
+          >
+            Re-check Environment
+          </button>
+        </div>
+      )}
 
       {/* Search & Category Filter Bar */}
       <div className="space-y-3">
