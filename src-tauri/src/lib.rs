@@ -223,7 +223,7 @@ pub fn validate_air_gapped_yaml(yaml_content: &str, _app_data_dir: &Path) -> Res
     }
 
     let model_list = root
-        .get(&serde_yaml::Value::String("model_list".to_string()))
+        .get(serde_yaml::Value::String("model_list".to_string()))
         .and_then(|v| v.as_sequence())
         .ok_or_else(|| "Missing model_list sequence in air-gapped config".to_string())?;
 
@@ -237,17 +237,17 @@ pub fn validate_air_gapped_yaml(yaml_content: &str, _app_data_dir: &Path) -> Res
             .ok_or_else(|| "model_list item must be a mapping".to_string())?;
 
         let lp = item_map
-            .get(&serde_yaml::Value::String("litellm_params".to_string()))
+            .get(serde_yaml::Value::String("litellm_params".to_string()))
             .and_then(|v| v.as_mapping())
             .ok_or_else(|| "model_list item missing litellm_params mapping".to_string())?;
 
         let model = lp
-            .get(&serde_yaml::Value::String("model".to_string()))
+            .get(serde_yaml::Value::String("model".to_string()))
             .and_then(|v| v.as_str())
             .ok_or_else(|| "litellm_params missing model string".to_string())?;
 
         let api_base = lp
-            .get(&serde_yaml::Value::String("api_base".to_string()))
+            .get(serde_yaml::Value::String("api_base".to_string()))
             .and_then(|v| v.as_str())
             .ok_or_else(|| {
                 format!(
@@ -415,7 +415,7 @@ fn close_sidecar_job(job_handle: Option<isize>) {
 fn close_sidecar_job(_job_handle: Option<isize>) {}
 
 pub async fn terminate_sidecar_tree(
-    mut child: CommandChild,
+    child: CommandChild,
     pid: Option<u32>,
     job_handle: Option<isize>,
 ) -> Result<(), String> {
@@ -430,7 +430,7 @@ pub async fn terminate_sidecar_tree(
     #[cfg(target_os = "windows")]
     if let Some(p) = pid {
         let _ = std::process::Command::new("taskkill")
-            .args(&["/F", "/T", "/PID", &p.to_string()])
+            .args(["/F", "/T", "/PID", &p.to_string()])
             .output();
     }
     let start = std::time::Instant::now();
@@ -984,12 +984,19 @@ impl SignedAdminClient {
     }
 }
 
+impl Default for SignedAdminClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Fail-Closed Tri-State Budget Limits Types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum TriState<T> {
+    #[default]
     Omitted,
     Unlimited,
     Value(T),
@@ -1018,12 +1025,6 @@ impl<T: Serialize> Serialize for TriState<T> {
             TriState::Unlimited => serializer.serialize_none(),
             TriState::Value(v) => v.serialize(serializer),
         }
-    }
-}
-
-impl<T> Default for TriState<T> {
-    fn default() -> Self {
-        TriState::Omitted
     }
 }
 
@@ -3472,10 +3473,7 @@ fn fingerprint_toml_entry(item: &toml_edit::Item) -> Option<String> {
     Some(compute_tool_fingerprint(command, &args, &env, url))
 }
 
-pub fn get_client_config_path(
-    app: &AppHandle,
-    target: ConfigTarget,
-) -> Result<(PathBuf, bool), String> {
+pub fn get_client_config_path(target: ConfigTarget) -> Result<(PathBuf, bool), String> {
     let home = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
         .unwrap_or_else(|_| ".".into());
@@ -3636,7 +3634,7 @@ pub fn sync_client_config_locked(
     create_backup: bool,
     expected_revision: ExpectedRevision,
 ) -> Result<ClientSyncResponse, String> {
-    let (config_path, is_jsonc) = get_client_config_path(app, target)?;
+    let (config_path, is_jsonc) = get_client_config_path(target)?;
     let app_data_dir = app
         .path()
         .app_data_dir()
@@ -3819,20 +3817,16 @@ pub fn sync_client_config_locked(
                 None => compute_tool_fingerprint(tool_def.command, &args_vec, &resolved_env, None),
             };
 
-            if existing_item.is_some() {
-                if !is_managed {
-                    tool_results.push(StructuredToolResult {
-                        tool_id: dt.tool_id.clone(),
-                        status: ToolSyncStatus::Collision,
-                        message: Some(
-                            "Collision: tool exists but was configured externally".into(),
-                        ),
-                        collision_details: Some("Entry modified by user or external tool".into()),
-                        missing_fields: None,
-                    });
-                    any_failures = true;
-                    continue;
-                }
+            if existing_item.is_some() && !is_managed {
+                tool_results.push(StructuredToolResult {
+                    tool_id: dt.tool_id.clone(),
+                    status: ToolSyncStatus::Collision,
+                    message: Some("Collision: tool exists but was configured externally".into()),
+                    collision_details: Some("Entry modified by user or external tool".into()),
+                    missing_fields: None,
+                });
+                any_failures = true;
+                continue;
             }
 
             let sync_status = if existing_item.is_some() {
@@ -4110,7 +4104,7 @@ fn revoke_tool(app: AppHandle, tool_id: String) -> Result<RevocationResult, Stri
             is_enabled: false,
         }];
 
-        let (config_path, _) = get_client_config_path(&app, target)?;
+        let (config_path, _) = get_client_config_path(target)?;
         let expected_rev = if config_path.exists() {
             match fs::read(&config_path) {
                 Ok(bytes) => ExpectedRevision::Exact(sha256_hex(&bytes)),
@@ -4642,7 +4636,7 @@ fn get_local_mesh_status(
                     for item in list {
                         if let Some(lp) = item.get("litellm_params").and_then(|v| v.as_mapping()) {
                             if let Some(api_base) = lp
-                                .get(&serde_yaml::Value::String("api_base".into()))
+                                .get(serde_yaml::Value::String("api_base".into()))
                                 .and_then(|v| v.as_str())
                             {
                                 if validate_numeric_loopback_url(api_base).is_ok() {
@@ -4755,8 +4749,8 @@ fn save_budget_config(app: AppHandle, budget: serde_json::Value) -> Result<(), S
 }
 
 #[tauri::command]
-fn read_client_config(app: AppHandle, target: ConfigTarget) -> Result<serde_json::Value, String> {
-    let (config_path, is_jsonc) = get_client_config_path(&app, target)?;
+fn read_client_config(_app: AppHandle, target: ConfigTarget) -> Result<serde_json::Value, String> {
+    let (config_path, is_jsonc) = get_client_config_path(target)?;
     if !config_path.exists() {
         return Ok(serde_json::json!({
             "exists": false,

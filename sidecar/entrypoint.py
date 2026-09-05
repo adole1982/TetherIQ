@@ -1680,6 +1680,7 @@ PUBLIC_HEALTH_ROUTES = {
     "/health/liveness",
     "/health/readiness",
     "/health/security-status",
+    "/tether/readiness",
 }
 
 CONTROL_PLANE_ROUTES = {
@@ -1799,6 +1800,7 @@ NON_BILLABLE_PATHS = {
     "/health/liveness",
     "/health/readiness",
     "/health/security-status",
+    "/tether/readiness",
     "/health/test-key",
     "/health/providers",
     "/health/local-mesh",
@@ -2813,6 +2815,7 @@ async def health_liveness():
         "instanceId": INSTANCE_ID
     })
 
+@app.get("/tether/readiness")
 @app.get("/health/readiness")
 async def health_readiness():
     """Readiness probe validating database, ledger, and routes are initialized."""
@@ -3562,7 +3565,7 @@ def start_readiness_announcer(bound_port, config_sha256):
             connection = None
             try:
                 connection = http.client.HTTPConnection("127.0.0.1", bound_port, timeout=0.5)
-                connection.request("GET", "/health/readiness")
+                connection.request("GET", "/tether/readiness")
                 response = connection.getresponse()
                 payload = json.loads(response.read(4096).decode("utf-8"))
                 if response.status == 200 and payload.get("status") == "ready":
