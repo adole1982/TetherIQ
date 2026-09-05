@@ -28,6 +28,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
       - name: Install frontend dependencies
         run: npm ci
       - name: Build frontend assets
@@ -47,6 +50,45 @@ jobs:
           New-Item -ItemType Directory -Force src-tauri/binaries | Out-Null
           Copy-Item -LiteralPath sidecar/dist/litellm-proxy/litellm-proxy.exe -Destination src-tauri/binaries/litellm-proxy-x86_64-pc-windows-msvc.exe
           Copy-Item -LiteralPath sidecar/dist/litellm-proxy/_internal -Destination src-tauri/binaries/_internal -Recurse
+      - name: Smoke-test packaged LiteLLM sidecar
+        shell: pwsh
+        run: |
+          $configPath = Join-Path $env:RUNNER_TEMP 'litellm-smoke.yaml'
+          $stdoutPath = Join-Path $env:RUNNER_TEMP 'litellm-smoke.stdout.log'
+          $stderrPath = Join-Path $env:RUNNER_TEMP 'litellm-smoke.stderr.log'
+          @'
+          model_list:
+            - model_name: local-smoke
+              litellm_params:
+                model: ollama/smoke
+                api_base: http://127.0.0.1:9
+          '@ | Set-Content -LiteralPath $configPath -Encoding utf8
+          $env:TETHER_SUPERVISED = '1'
+          $env:TETHER_HANDSHAKE_SECRET = 'ci-handshake-secret'
+          $env:TETHER_GATEWAY_TOKEN = 'ci-gateway-token'
+          $env:TETHER_INSTANCE_ID = 'ci-packaged-smoke'
+          $env:TETHER_GENERATION = '1'
+          $process = Start-Process -FilePath 'sidecar/dist/litellm-proxy/litellm-proxy.exe' -ArgumentList @('--port', '0', '--config', $configPath) -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+          try {
+            $ready = $false
+            for ($attempt = 0; $attempt -lt 120; $attempt++) {
+              if ($process.HasExited) {
+                throw "Packaged LiteLLM sidecar exited before readiness: $(Get-Content -LiteralPath $stderrPath -Raw)"
+              }
+              if ((Test-Path -LiteralPath $stdoutPath) -and (Select-String -LiteralPath $stdoutPath -Pattern '[TETHER_READY]:' -SimpleMatch -Quiet)) {
+                $ready = $true
+                break
+              }
+              Start-Sleep -Milliseconds 500
+            }
+            if (-not $ready) {
+              throw "Packaged LiteLLM sidecar did not reach readiness: $(Get-Content -LiteralPath $stderrPath -Raw)"
+            }
+          } finally {
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+            }
+          }
       - name: Rust formatting and parsing
         if: ${{ !cancelled() }}
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --check

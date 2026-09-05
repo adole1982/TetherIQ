@@ -3,7 +3,7 @@
 
 use futures_util::StreamExt;
 use regex::Regex;
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write as FmtWrite;
@@ -420,6 +420,12 @@ pub async fn terminate_sidecar_tree(
     job_handle: Option<isize>,
 ) -> Result<(), String> {
     close_sidecar_job(job_handle);
+    #[cfg(not(target_os = "windows"))]
+    if let Some(p) = pid {
+        unsafe {
+            libc::kill(-(p as i32), libc::SIGKILL);
+        }
+    }
     let _ = child.kill();
     #[cfg(target_os = "windows")]
     if let Some(p) = pid {
@@ -3808,12 +3814,10 @@ pub fn sync_client_config_locked(
                 continue;
             }
 
-            let fingerprint = compute_tool_fingerprint(
-                tool_def.command,
-                &args_vec,
-                &resolved_env,
-                tool_def.server_url,
-            );
+            let fingerprint = match tool_def.server_url {
+                Some(url) => compute_tool_fingerprint("", &[], &resolved_env, Some(url)),
+                None => compute_tool_fingerprint(tool_def.command, &args_vec, &resolved_env, None),
+            };
 
             if existing_item.is_some() {
                 if !is_managed {
@@ -3842,15 +3846,15 @@ pub fn sync_client_config_locked(
                 server_table.insert("url", toml_edit::value(url));
             } else {
                 server_table.insert("command", toml_edit::value(tool_def.command));
+                let mut args_arr = toml_edit::Array::new();
+                for arg in &args_vec {
+                    args_arr.push(arg.as_str());
+                }
+                server_table.insert(
+                    "args",
+                    toml_edit::Item::Value(toml_edit::Value::Array(args_arr)),
+                );
             }
-            let mut args_arr = toml_edit::Array::new();
-            for arg in &args_vec {
-                args_arr.push(arg.as_str());
-            }
-            server_table.insert(
-                "args",
-                toml_edit::Item::Value(toml_edit::Value::Array(args_arr)),
-            );
 
             let mut env_table = toml_edit::Table::new();
             for (k, v) in resolved_env {
@@ -4002,12 +4006,10 @@ pub fn sync_client_config_locked(
                 continue;
             }
 
-            let fingerprint = compute_tool_fingerprint(
-                tool_def.command,
-                &args_vec,
-                &resolved_env,
-                tool_def.server_url,
-            );
+            let fingerprint = match tool_def.server_url {
+                Some(url) => compute_tool_fingerprint("", &[], &resolved_env, Some(url)),
+                None => compute_tool_fingerprint(tool_def.command, &args_vec, &resolved_env, None),
+            };
 
             if existing_item.is_some() && !is_managed {
                 tool_results.push(StructuredToolResult {
@@ -4083,7 +4085,7 @@ pub fn sync_client_config_locked(
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub fn revoke_tool(app: AppHandle, tool_id: String) -> Result<RevocationResult, String> {
+fn revoke_tool(app: AppHandle, tool_id: String) -> Result<RevocationResult, String> {
     let _lock = CONFIG_WRITE_LOCK.lock().unwrap();
     let def =
         find_tool_definition(&tool_id).ok_or_else(|| format!("Unknown tool ID: {}", tool_id))?;
@@ -4211,7 +4213,7 @@ pub fn revoke_tool(app: AppHandle, tool_id: String) -> Result<RevocationResult, 
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub fn check_runtime_environment() -> Result<serde_json::Value, String> {
+fn check_runtime_environment() -> Result<serde_json::Value, String> {
     let has_node = std::process::Command::new("node")
         .arg("--version")
         .output()
@@ -4235,7 +4237,7 @@ pub fn check_runtime_environment() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-pub fn get_gateway_diagnostics(
+fn get_gateway_diagnostics(
     supervisor: tauri::State<'_, SidecarSupervisor>,
 ) -> Result<serde_json::Value, String> {
     let guard = supervisor.state.lock().unwrap();
@@ -4254,14 +4256,14 @@ pub fn get_gateway_diagnostics(
 }
 
 #[tauri::command]
-pub fn get_diagnostic_status(
+fn get_diagnostic_status(
     supervisor: tauri::State<'_, SidecarSupervisor>,
 ) -> Result<serde_json::Value, String> {
     get_gateway_diagnostics(supervisor)
 }
 
 #[tauri::command]
-pub fn get_proxy_status(
+fn get_proxy_status(
     supervisor: tauri::State<'_, SidecarSupervisor>,
 ) -> Result<serde_json::Value, String> {
     let guard = supervisor.state.lock().unwrap();
@@ -4273,7 +4275,7 @@ pub fn get_proxy_status(
 }
 
 #[tauri::command]
-pub fn copy_gateway_environment(
+fn copy_gateway_environment(
     supervisor: tauri::State<'_, SidecarSupervisor>,
     client: String,
 ) -> Result<(), String> {
@@ -4336,7 +4338,7 @@ pub fn copy_gateway_environment(
 }
 
 #[tauri::command]
-pub async fn get_provider_health(
+async fn get_provider_health(
     supervisor: tauri::State<'_, SidecarSupervisor>,
     client: tauri::State<'_, SignedAdminClient>,
 ) -> Result<serde_json::Value, String> {
@@ -4359,7 +4361,7 @@ pub async fn get_provider_health(
 }
 
 #[tauri::command]
-pub fn open_external_url(url: String) -> Result<(), String> {
+fn open_external_url(url: String) -> Result<(), String> {
     let url = validate_external_url(&url)?;
 
     #[cfg(target_os = "windows")]
@@ -4426,7 +4428,7 @@ fn open_external_url_windows(url: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn update_budget_limits(
+async fn update_budget_limits(
     supervisor: tauri::State<'_, SidecarSupervisor>,
     client: tauri::State<'_, SignedAdminClient>,
     limits: BudgetLimitsPayload,
@@ -4463,7 +4465,7 @@ pub async fn update_budget_limits(
 }
 
 #[tauri::command]
-pub async fn reset_spend_data(
+async fn reset_spend_data(
     supervisor: tauri::State<'_, SidecarSupervisor>,
     client: tauri::State<'_, SignedAdminClient>,
 ) -> Result<ResetSpendResponse, String> {
@@ -4488,7 +4490,7 @@ pub async fn reset_spend_data(
 }
 
 #[tauri::command]
-pub async fn get_spend_summary(
+async fn get_spend_summary(
     supervisor: tauri::State<'_, SidecarSupervisor>,
     client: tauri::State<'_, SignedAdminClient>,
 ) -> Result<SpendSummary, String> {
@@ -4508,7 +4510,7 @@ pub async fn get_spend_summary(
 }
 
 #[tauri::command]
-pub async fn get_telemetry_snapshot(
+async fn get_telemetry_snapshot(
     app: AppHandle,
     supervisor: tauri::State<'_, SidecarSupervisor>,
     client: tauri::State<'_, SignedAdminClient>,
@@ -4526,7 +4528,7 @@ pub async fn get_telemetry_snapshot(
 }
 
 #[tauri::command]
-pub async fn restart_litellm_sidecar(
+async fn restart_litellm_sidecar(
     app: AppHandle,
     supervisor: tauri::State<'_, SidecarSupervisor>,
 ) -> Result<serde_json::Value, String> {
@@ -4564,7 +4566,7 @@ pub async fn restart_litellm_sidecar(
 }
 
 #[tauri::command]
-pub async fn apply_air_gapped_mode(
+async fn apply_air_gapped_mode(
     app: AppHandle,
     supervisor: tauri::State<'_, SidecarSupervisor>,
     enabled: bool,
@@ -4625,7 +4627,7 @@ pub async fn apply_air_gapped_mode(
 }
 
 #[tauri::command]
-pub fn get_local_mesh_status(
+fn get_local_mesh_status(
     app: AppHandle,
     supervisor: tauri::State<'_, SidecarSupervisor>,
 ) -> Result<LocalMeshStatus, String> {
@@ -4670,7 +4672,7 @@ pub fn get_local_mesh_status(
 }
 
 #[tauri::command]
-pub fn get_system_paths(app: AppHandle) -> Result<serde_json::Value, String> {
+fn get_system_paths(app: AppHandle) -> Result<serde_json::Value, String> {
     let config_path = resolve_config_path(&app);
     let app_dir = config_path.parent().unwrap_or(&config_path);
     Ok(serde_json::json!({
@@ -4680,7 +4682,7 @@ pub fn get_system_paths(app: AppHandle) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-pub fn save_litellm_config(app: AppHandle, yaml_content: String) -> Result<(), String> {
+fn save_litellm_config(app: AppHandle, yaml_content: String) -> Result<(), String> {
     let config_path = resolve_config_path(&app);
     let rand_suffix = generate_os_random_hex(6)?;
     let temp_file = config_path.with_extension(format!("yaml.{}.tmp", rand_suffix));
@@ -4689,7 +4691,7 @@ pub fn save_litellm_config(app: AppHandle, yaml_content: String) -> Result<(), S
 }
 
 #[tauri::command]
-pub async fn validate_provider_key(
+async fn validate_provider_key(
     supervisor: tauri::State<'_, SidecarSupervisor>,
     client: tauri::State<'_, SignedAdminClient>,
     provider: String,
@@ -4720,7 +4722,7 @@ pub async fn validate_provider_key(
 }
 
 #[tauri::command]
-pub fn read_budget_config(app: AppHandle) -> Result<serde_json::Value, String> {
+fn read_budget_config(app: AppHandle) -> Result<serde_json::Value, String> {
     let config_path = resolve_config_path(&app);
     let budget_file = config_path
         .parent()
@@ -4739,7 +4741,7 @@ pub fn read_budget_config(app: AppHandle) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-pub fn save_budget_config(app: AppHandle, budget: serde_json::Value) -> Result<(), String> {
+fn save_budget_config(app: AppHandle, budget: serde_json::Value) -> Result<(), String> {
     let config_path = resolve_config_path(&app);
     let budget_file = config_path
         .parent()
@@ -4753,10 +4755,7 @@ pub fn save_budget_config(app: AppHandle, budget: serde_json::Value) -> Result<(
 }
 
 #[tauri::command]
-pub fn read_client_config(
-    app: AppHandle,
-    target: ConfigTarget,
-) -> Result<serde_json::Value, String> {
+fn read_client_config(app: AppHandle, target: ConfigTarget) -> Result<serde_json::Value, String> {
     let (config_path, is_jsonc) = get_client_config_path(&app, target)?;
     if !config_path.exists() {
         return Ok(serde_json::json!({
@@ -4822,7 +4821,7 @@ pub fn read_client_config(
 }
 
 #[tauri::command]
-pub fn sync_client_config(
+fn sync_client_config(
     app: AppHandle,
     target: ConfigTarget,
     tools: Vec<DesiredToolState>,
@@ -4834,7 +4833,7 @@ pub fn sync_client_config(
 }
 
 #[tauri::command]
-pub fn get_tool_assignments(app: AppHandle) -> Result<Vec<ToolAssignmentState>, String> {
+fn get_tool_assignments(app: AppHandle) -> Result<Vec<ToolAssignmentState>, String> {
     let config_path = resolve_config_path(&app);
     let assign_file = config_path
         .parent()
@@ -4850,7 +4849,7 @@ pub fn get_tool_assignments(app: AppHandle) -> Result<Vec<ToolAssignmentState>, 
 }
 
 #[tauri::command]
-pub fn save_tool_assignments(
+fn save_tool_assignments(
     app: AppHandle,
     assignments: Vec<ToolAssignmentState>,
 ) -> Result<bool, String> {
@@ -4897,7 +4896,7 @@ fn secret_hint(secret: &str) -> String {
 }
 
 #[tauri::command]
-pub fn list_tool_credential_summaries() -> Result<Vec<ToolCredentialSummary>, String> {
+fn list_tool_credential_summaries() -> Result<Vec<ToolCredentialSummary>, String> {
     let catalog = get_full_catalog();
     let mut summaries = Vec::new();
 
@@ -4935,7 +4934,7 @@ pub struct ToolCredentialMutation {
 }
 
 #[tauri::command]
-pub fn mutate_tool_credentials(
+fn mutate_tool_credentials(
     tool_id: String,
     mutations: Vec<ToolCredentialMutation>,
 ) -> Result<ToolCredentialSummary, String> {
@@ -4999,7 +4998,7 @@ pub struct CredentialSummary {
 }
 
 #[tauri::command]
-pub fn list_credential_summaries() -> Result<Vec<CredentialSummary>, String> {
+fn list_credential_summaries() -> Result<Vec<CredentialSummary>, String> {
     let providers = [
         "openai",
         "anthropic",
@@ -5038,7 +5037,7 @@ pub fn list_credential_summaries() -> Result<Vec<CredentialSummary>, String> {
 }
 
 #[tauri::command]
-pub fn set_provider_credential(
+fn set_provider_credential(
     provider: String,
     credential: String,
 ) -> Result<CredentialSummary, String> {
@@ -5072,13 +5071,13 @@ pub fn set_provider_credential(
 }
 
 #[tauri::command]
-pub fn delete_provider_credential(provider: String) -> Result<bool, String> {
+fn delete_provider_credential(provider: String) -> Result<bool, String> {
     delete_provider_secret(&provider)?;
     Ok(true)
 }
 
 #[tauri::command]
-pub fn get_routing_metadata(app: AppHandle) -> Result<serde_json::Value, String> {
+fn get_routing_metadata(app: AppHandle) -> Result<serde_json::Value, String> {
     let config_path = resolve_config_path(&app);
     let routing_file = config_path
         .parent()
@@ -5094,7 +5093,7 @@ pub fn get_routing_metadata(app: AppHandle) -> Result<serde_json::Value, String>
 }
 
 #[tauri::command]
-pub fn save_routing_metadata(app: AppHandle, metadata: serde_json::Value) -> Result<bool, String> {
+fn save_routing_metadata(app: AppHandle, metadata: serde_json::Value) -> Result<bool, String> {
     let config_path = resolve_config_path(&app);
     let routing_file = config_path
         .parent()
@@ -5109,7 +5108,7 @@ pub fn save_routing_metadata(app: AppHandle, metadata: serde_json::Value) -> Res
 }
 
 #[tauri::command]
-pub fn set_auto_start_on_boot(app: AppHandle, enabled: bool) -> Result<(), String> {
+fn set_auto_start_on_boot(app: AppHandle, enabled: bool) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         let executable = std::env::current_exe()
@@ -5157,7 +5156,7 @@ pub fn set_auto_start_on_boot(app: AppHandle, enabled: bool) -> Result<(), Strin
 }
 
 #[tauri::command]
-pub fn open_os_startup_settings() -> Result<(), String> {
+fn open_os_startup_settings() -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use std::ffi::OsStr;
@@ -5195,7 +5194,7 @@ pub fn open_os_startup_settings() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn get_mcp_catalog() -> Result<Vec<serde_json::Value>, String> {
+fn get_mcp_catalog() -> Result<Vec<serde_json::Value>, String> {
     let catalog = get_full_catalog();
     let values: Vec<serde_json::Value> = catalog
         .iter()
@@ -5483,6 +5482,10 @@ mod tests {
         }
 
         assert_eq!(sig.len(), 64);
+        assert_eq!(
+            sig,
+            "29458c7197d5a3261f09e85b36731be6d946006b80094827c0b93b49326efafc"
+        );
         assert!(constant_time_eq_hex(&sig, &sig));
     }
 

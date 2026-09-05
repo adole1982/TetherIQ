@@ -32,6 +32,7 @@ sidecar/__pycache__/
 # Rust / Tauri Build Artifacts
 src-tauri/target/
 src-tauri/gen/
+src-tauri/binaries/
 
 # Executables & Compiled Binaries
 *.exe
@@ -51,6 +52,7 @@ src-tauri/gen/
 !.env.example
 tethermesh_vault.json
 tethermesh_budget.json
+.tether/
 
 # Editor & OS Artifacts
 .DS_Store

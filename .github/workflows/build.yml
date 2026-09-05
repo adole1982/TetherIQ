@@ -23,22 +23,22 @@ jobs:
             os: windows-latest
             target: x86_64-pc-windows-msvc
             sidecar_binary: litellm-proxy-x86_64-pc-windows-msvc.exe
-            py_sidecar_out: sidecar/dist/litellm-proxy.exe
+            py_sidecar_out: sidecar/dist/litellm-proxy/litellm-proxy.exe
           - name: macOS Apple Silicon (arm64)
             os: macos-latest
             target: aarch64-apple-darwin
             sidecar_binary: litellm-proxy-aarch64-apple-darwin
-            py_sidecar_out: sidecar/dist/litellm-proxy
+            py_sidecar_out: sidecar/dist/litellm-proxy/litellm-proxy
           - name: macOS Intel (x64)
             os: macos-13
             target: x86_64-apple-darwin
             sidecar_binary: litellm-proxy-x86_64-apple-darwin
-            py_sidecar_out: sidecar/dist/litellm-proxy
+            py_sidecar_out: sidecar/dist/litellm-proxy/litellm-proxy
           - name: Linux x64
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             sidecar_binary: litellm-proxy-x86_64-unknown-linux-gnu
-            py_sidecar_out: sidecar/dist/litellm-proxy
+            py_sidecar_out: sidecar/dist/litellm-proxy/litellm-proxy
 
     steps:
       - name: Checkout repository
@@ -55,6 +55,12 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel pyinstaller
           pip install -r sidecar/requirements.txt
 
+      - name: Run Python security tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Run standalone air-gap security tests
+        run: python sidecar/test_airgap_security.py
+
       - name: Compile PyInstaller Sidecar Binary
         shell: bash
         run: |
@@ -63,19 +69,17 @@ jobs:
           cd ..
           mkdir -p src-tauri/binaries
           if [ "${{ runner.os }}" == "Windows" ]; then
-            cp sidecar/dist/litellm-proxy.exe src-tauri/binaries/${{ matrix.platform.sidecar_binary }}
-            cp sidecar/dist/litellm-proxy.exe src-tauri/binaries/litellm-proxy.exe
+            cp "${{ matrix.platform.py_sidecar_out }}" src-tauri/binaries/${{ matrix.platform.sidecar_binary }}
           else
-            cp sidecar/dist/litellm-proxy src-tauri/binaries/${{ matrix.platform.sidecar_binary }}
-            cp sidecar/dist/litellm-proxy src-tauri/binaries/litellm-proxy
+            cp "${{ matrix.platform.py_sidecar_out }}" src-tauri/binaries/${{ matrix.platform.sidecar_binary }}
             chmod +x src-tauri/binaries/${{ matrix.platform.sidecar_binary }}
-            chmod +x src-tauri/binaries/litellm-proxy
           fi
+          cp -R sidecar/dist/litellm-proxy/_internal src-tauri/binaries/_internal
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install Node dependencies
@@ -100,7 +104,23 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      - name: Check native code
+        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
+
+      - name: Lint native code
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Test native code
+        run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets
+
       - name: Build Tauri Desktop Application Bundle
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: tauri-apps/tauri-action@v0
+        with:
+          args: --target ${{ matrix.platform.target }}
+
+      - name: Build bundle and draft tagged release
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

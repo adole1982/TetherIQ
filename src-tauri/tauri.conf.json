@@ -33,6 +33,9 @@
     "externalBin": [
       "binaries/litellm-proxy"
     ],
+    "resources": {
+      "binaries/_internal/": "_internal/"
+    },
     "icon": [
       "../public/brand/generated/favicon-32x32.png",
       "../public/brand/generated/favicon-256x256.png",

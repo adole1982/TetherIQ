@@ -36,8 +36,22 @@ import hashlib
 import threading
 import math
 import secrets
+import signal
 
 START_TIME = time.time()
+OWNS_PROCESS_GROUP = False
+
+
+def establish_process_group():
+    """Give the sidecar and any descendants an independently terminable Unix group."""
+    global OWNS_PROCESS_GROUP
+    if os.name == "nt":
+        return
+    try:
+        os.setsid()
+    except OSError:
+        pass
+    OWNS_PROCESS_GROUP = os.getpgrp() == os.getpid()
 
 def start_parent_watchdog():
     """Background daemon thread ensuring the sidecar terminates if the parent process dies across all OSes."""
@@ -52,6 +66,8 @@ def start_parent_watchdog():
                 current_ppid = os.getppid()
                 if current_ppid != initial_ppid or current_ppid <= 1:
                     print(f"[TetherMesh Watchdog] Parent process {initial_ppid} terminated. Exiting sidecar.", flush=True)
+                    if OWNS_PROCESS_GROUP:
+                        os.killpg(os.getpgrp(), signal.SIGKILL)
                     os._exit(0)
             except Exception:
                 pass
@@ -3567,6 +3583,7 @@ def start_readiness_announcer(bound_port, config_sha256):
 
 
 def main():
+    establish_process_group()
     start_parent_watchdog()
     parser = argparse.ArgumentParser(description="TetherMesh LiteLLM Sidecar")
     parser.add_argument("--port", type=int, default=0, help="Port to listen on (0 for dynamic ephemeral)")
