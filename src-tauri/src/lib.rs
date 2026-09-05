@@ -3371,8 +3371,8 @@ pub fn get_client_config_path(
                 .join("mcp_config.json"),
             false,
         ),
-        ConfigTarget::Devin => (home_path.join(".devin").join("mcp.json"), false),
-        ConfigTarget::ClaudeCode => (home_path.join(".claude").join("mcp.json"), false),
+        ConfigTarget::Devin => (home_path.join(".devin").join("config.json"), false),
+        ConfigTarget::ClaudeCode => (home_path.join(".claude.json"), false),
         ConfigTarget::ClaudeDesktop => {
             #[cfg(target_os = "windows")]
             let p = PathBuf::from(std::env::var("APPDATA").unwrap_or_else(|_| ".".into()))
@@ -3403,10 +3403,10 @@ pub fn get_client_config_path(
         ConfigTarget::Vscode => {
             #[cfg(target_os = "windows")]
             let p = PathBuf::from(std::env::var("APPDATA").unwrap_or_else(|_| ".".into()))
-                .join("Code/User/settings.json");
+                .join("Code/User/mcp.json");
             #[cfg(not(target_os = "windows"))]
-            let p = home_path.join(".config/Code/User/settings.json");
-            (p, true)
+            let p = home_path.join(".config/Code/User/mcp.json");
+            (p, false)
         }
         ConfigTarget::Codex => (home_path.join(".codex").join("config.toml"), false),
     };
@@ -3510,21 +3510,6 @@ pub fn sync_client_config_locked(
         String::new()
     };
 
-    let backup_path = if create_backup && file_exists {
-        let backup = config_path.with_extension(format!(
-            "{}.bak",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_err(|e| format!("Clock error: {}", e))?
-                .as_millis()
-        ));
-        fs::copy(&config_path, &backup)
-            .map_err(|e| format!("Failed to create config backup: {}", e))?;
-        Some(backup.to_string_lossy().to_string())
-    } else {
-        None
-    };
-
     match expected_revision {
         ExpectedRevision::Missing => {
             if file_exists {
@@ -3545,6 +3530,21 @@ pub fn sync_client_config_locked(
             }
         }
     }
+
+    let backup_path = if create_backup && file_exists {
+        let backup = config_path.with_extension(format!(
+            "{}.bak",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|e| format!("Clock error: {}", e))?
+                .as_millis()
+        ));
+        fs::copy(&config_path, &backup)
+            .map_err(|e| format!("Failed to create config backup: {}", e))?;
+        Some(backup.to_string_lossy().to_string())
+    } else {
+        None
+    };
 
     let mut tool_results = Vec::new();
     let mut any_failures = false;
@@ -3726,13 +3726,14 @@ pub fn sync_client_config_locked(
             } else {
                 content
             };
-            serde_json::from_str(&clean).unwrap_or_else(|_| serde_json::json!({}))
+            serde_json::from_str(&clean)
+                .map_err(|e| format!("Refusing to overwrite malformed JSON configuration: {}", e))?
         } else {
             serde_json::json!({})
         };
 
         let key_name = if target == ConfigTarget::Vscode {
-            "mcpServers"
+            "servers"
         } else {
             "mcpServers"
         };
