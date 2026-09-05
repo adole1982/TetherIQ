@@ -50,6 +50,7 @@ pub struct SidecarSupervisorState {
     pub phase: SidecarPhase,
     pub child: Option<CommandChild>,
     pub pid: Option<u32>,
+    pub job_handle: Option<isize>,
     pub generation: u64,
     pub is_air_gapped: bool,
 }
@@ -70,6 +71,7 @@ impl Default for SidecarSupervisor {
                 phase: SidecarPhase::Stopped,
                 child: None,
                 pid: None,
+                job_handle: None,
                 generation: 0,
                 is_air_gapped: false,
             })),
@@ -81,37 +83,10 @@ impl Default for SidecarSupervisor {
 // Security: CSPRNG Hex Secret Generator & Constant-Time Verification
 // ---------------------------------------------------------------------------
 
-pub fn generate_os_random_hex(byte_count: usize) -> String {
+pub fn generate_os_random_hex(byte_count: usize) -> Result<String, String> {
     let mut bytes = vec![0u8; byte_count];
-    #[cfg(target_os = "windows")]
-    {
-        use windows_sys::Win32::Security::Cryptography::BCryptGenRandom;
-        unsafe {
-            let status = BCryptGenRandom(
-                std::ptr::null_mut(),
-                bytes.as_mut_ptr(),
-                bytes.len() as u32,
-                2, // BCRYPT_USE_SYSTEM_PREFERRED_RNG
-            );
-            if status != 0 {
-                for (i, b) in bytes.iter_mut().enumerate() {
-                    let nanos = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_nanos();
-                    *b = ((nanos >> (i * 8 % 64)) & 0xFF) as u8;
-                }
-            }
-        }
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        use std::io::Read;
-        if let Ok(mut f) = fs::File::open("/dev/urandom") {
-            let _ = f.read_exact(&mut bytes);
-        }
-    }
-    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+    getrandom::fill(&mut bytes).map_err(|e| format!("OS random generator failed: {}", e))?;
+    Ok(bytes.iter().map(|b| format!("{:02x}", b)).collect())
 }
 
 pub fn constant_time_eq_hex(a: &str, b: &str) -> bool {
@@ -370,7 +345,7 @@ pub fn persist_air_gapped_state(app_data_dir: &Path, enabled: bool) -> Result<()
 // ---------------------------------------------------------------------------
 
 #[cfg(target_os = "windows")]
-fn assign_process_to_kill_on_close_job(pid: u32) {
+fn assign_process_to_kill_on_close_job(pid: u32) -> Result<isize, String> {
     use windows_sys::Win32::Foundation::CloseHandle;
     use windows_sys::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
@@ -383,25 +358,67 @@ fn assign_process_to_kill_on_close_job(pid: u32) {
 
     unsafe {
         let job = CreateJobObjectW(std::ptr::null_mut(), std::ptr::null());
-        if !job.is_null() {
-            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-            SetInformationJobObject(
-                job,
-                JobObjectExtendedLimitInformation,
-                &info as *const _ as *const _,
-                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-            );
-            let process = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, 0, pid);
-            if !process.is_null() {
-                AssignProcessToJobObject(job, process);
-                CloseHandle(process);
-            }
+        if job.is_null() {
+            return Err(format!(
+                "Failed to create sidecar job object: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+
+        let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        if SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &info as *const _ as *const _,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        ) == 0
+        {
+            let error = std::io::Error::last_os_error();
+            CloseHandle(job);
+            return Err(format!("Failed to configure sidecar job object: {}", error));
+        }
+
+        let process = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, 0, pid);
+        if process.is_null() {
+            let error = std::io::Error::last_os_error();
+            CloseHandle(job);
+            return Err(format!("Failed to open sidecar process {}: {}", pid, error));
+        }
+
+        let assigned = AssignProcessToJobObject(job, process);
+        CloseHandle(process);
+        if assigned == 0 {
+            let error = std::io::Error::last_os_error();
+            CloseHandle(job);
+            return Err(format!(
+                "Failed to assign sidecar process {} to its job object: {}",
+                pid, error
+            ));
+        }
+
+        Ok(job as isize)
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn close_sidecar_job(job_handle: Option<isize>) {
+    if let Some(handle) = job_handle {
+        unsafe {
+            windows_sys::Win32::Foundation::CloseHandle(handle as _);
         }
     }
 }
 
-pub async fn terminate_sidecar_tree(mut child: CommandChild, pid: Option<u32>) {
+#[cfg(not(target_os = "windows"))]
+fn close_sidecar_job(_job_handle: Option<isize>) {}
+
+pub async fn terminate_sidecar_tree(
+    mut child: CommandChild,
+    pid: Option<u32>,
+    job_handle: Option<isize>,
+) -> Result<(), String> {
+    close_sidecar_job(job_handle);
     let _ = child.kill();
     #[cfg(target_os = "windows")]
     if let Some(p) = pid {
@@ -410,6 +427,7 @@ pub async fn terminate_sidecar_tree(mut child: CommandChild, pid: Option<u32>) {
             .output();
     }
     let start = std::time::Instant::now();
+    let mut exited = pid.is_none();
     while start.elapsed().as_millis() < 3000 {
         if let Some(p) = pid {
             #[cfg(target_os = "windows")]
@@ -420,6 +438,7 @@ pub async fn terminate_sidecar_tree(mut child: CommandChild, pid: Option<u32>) {
                 };
                 let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, p) };
                 if handle.is_null() {
+                    exited = true;
                     break;
                 } else {
                     unsafe {
@@ -430,13 +449,24 @@ pub async fn terminate_sidecar_tree(mut child: CommandChild, pid: Option<u32>) {
             #[cfg(not(target_os = "windows"))]
             {
                 if unsafe { libc::kill(p as i32, 0) } != 0 {
+                    exited = true;
                     break;
                 }
             }
         } else {
+            exited = true;
             break;
         }
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
+
+    if exited {
+        Ok(())
+    } else {
+        Err(format!(
+            "Sidecar process {} did not terminate within 3 seconds",
+            pid.unwrap_or_default()
+        ))
     }
 }
 
@@ -526,9 +556,9 @@ pub async fn spawn_litellm_sidecar(
     app: AppHandle,
     supervisor: tauri::State<'_, SidecarSupervisor>,
 ) -> Result<CommandChild, String> {
-    let secret = generate_os_random_hex(32);
-    let gateway_token = format!("tether_gw_{}", generate_os_random_hex(24));
-    let instance_id = format!("tether_{}", generate_os_random_hex(8));
+    let secret = generate_os_random_hex(32)?;
+    let gateway_token = format!("tether_gw_{}", generate_os_random_hex(24)?);
+    let instance_id = format!("tether_{}", generate_os_random_hex(8)?);
 
     let (generation, is_air_gapped) = {
         let mut guard = supervisor.state.lock().unwrap();
@@ -595,11 +625,22 @@ pub async fn spawn_litellm_sidecar(
 
     let pid = child.pid();
     #[cfg(target_os = "windows")]
-    assign_process_to_kill_on_close_job(pid);
+    let job_handle = match assign_process_to_kill_on_close_job(pid) {
+        Ok(handle) => Some(handle),
+        Err(error) => {
+            let _ = child.kill();
+            let mut guard = supervisor.state.lock().unwrap();
+            guard.phase = SidecarPhase::Failed;
+            return Err(error);
+        }
+    };
+    #[cfg(not(target_os = "windows"))]
+    let job_handle = None;
 
     {
         let mut guard = supervisor.state.lock().unwrap();
         guard.pid = Some(pid);
+        guard.job_handle = job_handle;
     }
 
     let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<Result<u16, String>>();
@@ -737,11 +778,17 @@ pub async fn spawn_litellm_sidecar(
                         "[Supervisor] Sidecar process terminated with code {:?}",
                         term.code
                     );
-                    {
+                    let terminated_job = {
                         let mut guard = supervisor_clone.lock().unwrap();
-                        guard.phase = SidecarPhase::Crashed;
-                        guard.pid = None;
-                    }
+                        if guard.generation == generation {
+                            guard.phase = SidecarPhase::Crashed;
+                            guard.pid = None;
+                            guard.job_handle.take()
+                        } else {
+                            None
+                        }
+                    };
+                    close_sidecar_job(terminated_job);
                     if let Some(tx) = ready_tx_opt.take() {
                         let _ = tx.send(Err(format!(
                             "Sidecar process terminated prematurely with code {:?}",
@@ -769,27 +816,33 @@ pub async fn spawn_litellm_sidecar(
             Ok(child)
         }
         Ok(Ok(Err(e))) => {
-            {
+            let failed_job = {
                 let mut guard = supervisor.state.lock().unwrap();
                 guard.phase = SidecarPhase::Failed;
-            }
-            let _ = child.kill();
+                guard.pid = None;
+                guard.job_handle.take()
+            };
+            let _ = terminate_sidecar_tree(child, Some(pid), failed_job).await;
             Err(format!("Sidecar readiness verification failed: {}", e))
         }
         Ok(Err(_)) => {
-            {
+            let failed_job = {
                 let mut guard = supervisor.state.lock().unwrap();
                 guard.phase = SidecarPhase::Failed;
-            }
-            let _ = child.kill();
+                guard.pid = None;
+                guard.job_handle.take()
+            };
+            let _ = terminate_sidecar_tree(child, Some(pid), failed_job).await;
             Err("Sidecar communication channel closed before ready".to_string())
         }
         Err(_) => {
-            {
+            let failed_job = {
                 let mut guard = supervisor.state.lock().unwrap();
                 guard.phase = SidecarPhase::Failed;
-            }
-            let _ = child.kill();
+                guard.pid = None;
+                guard.job_handle.take()
+            };
+            let _ = terminate_sidecar_tree(child, Some(pid), failed_job).await;
             Err("Timed out waiting for [TETHER_READY] from sidecar after 15 seconds".to_string())
         }
     }
@@ -841,7 +894,7 @@ impl SignedAdminClient {
             .as_secs()
             .to_string();
 
-        let nonce = generate_os_random_hex(16);
+        let nonce = generate_os_random_hex(16)?;
         let body_bytes = body.unwrap_or_default();
         let body_hash = sha256_hex(&body_bytes);
 
@@ -1022,11 +1075,16 @@ pub struct ResetSpendResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SpendSummary {
-    pub daily_spend_microusd: i64,
-    pub monthly_spend_microusd: i64,
+    #[serde(alias = "dailySpentMicrousd")]
+    pub daily_spent_microusd: i64,
+    #[serde(alias = "monthlySpentMicrousd")]
+    pub monthly_spent_microusd: i64,
+    #[serde(alias = "dailyLimitMicrousd")]
     pub daily_limit_microusd: Option<i64>,
+    #[serde(alias = "monthlyLimitMicrousd")]
     pub monthly_limit_microusd: Option<i64>,
-    pub is_circuit_breaker_tripped: bool,
+    #[serde(alias = "isTripped", alias = "is_circuit_breaker_tripped")]
+    pub is_tripped: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -3353,6 +3411,61 @@ pub fn compute_tool_fingerprint(
     sha256_hex(payload.to_string().as_bytes())
 }
 
+fn fingerprint_json_entry(value: &serde_json::Value) -> Option<String> {
+    let object = value.as_object()?;
+    let command = object.get("command").and_then(|v| v.as_str()).unwrap_or("");
+    let args = object
+        .get("args")
+        .and_then(|v| v.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(str::to_string))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let env = object
+        .get("env")
+        .or_else(|| object.get("headers"))
+        .and_then(|v| v.as_object())
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|(key, value)| value.as_str().map(|s| (key.clone(), s.to_string())))
+                .collect::<BTreeMap<_, _>>()
+        })
+        .unwrap_or_default();
+    let url = object.get("url").and_then(|v| v.as_str());
+    Some(compute_tool_fingerprint(command, &args, &env, url))
+}
+
+fn fingerprint_toml_entry(item: &toml_edit::Item) -> Option<String> {
+    let table = item.as_table()?;
+    let command = table.get("command").and_then(|v| v.as_str()).unwrap_or("");
+    let args = table
+        .get("args")
+        .and_then(|v| v.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(str::to_string))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let env = table
+        .get("env")
+        .and_then(|v| v.as_table())
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|(key, value)| value.as_str().map(|s| (key.to_string(), s.to_string())))
+                .collect::<BTreeMap<_, _>>()
+        })
+        .unwrap_or_default();
+    let url = table.get("url").and_then(|v| v.as_str());
+    Some(compute_tool_fingerprint(command, &args, &env, url))
+}
+
 pub fn get_client_config_path(
     app: &AppHandle,
     target: ConfigTarget,
@@ -3456,8 +3569,39 @@ pub fn strip_jsonc_comments(jsonc: &str) -> String {
         }
     }
 
-    let re_trailing = Regex::new(r",\s*([}\]])").unwrap();
-    re_trailing.replace_all(&out, "$1").to_string()
+    let chars: Vec<char> = out.chars().collect();
+    let mut cleaned = String::with_capacity(out.len());
+    let mut in_string = false;
+    let mut escape = false;
+    for (index, character) in chars.iter().copied().enumerate() {
+        if in_string {
+            cleaned.push(character);
+            if escape {
+                escape = false;
+            } else if character == '\\' {
+                escape = true;
+            } else if character == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        if character == '"' {
+            in_string = true;
+            cleaned.push(character);
+            continue;
+        }
+        if character == ',' {
+            let next = chars[index + 1..]
+                .iter()
+                .copied()
+                .find(|next| !next.is_whitespace());
+            if matches!(next, Some('}') | Some(']')) {
+                continue;
+            }
+        }
+        cleaned.push(character);
+    }
+    cleaned
 }
 
 pub fn load_manifest(app_data_dir: &Path) -> ManagedMcpManifest {
@@ -3583,7 +3727,11 @@ pub fn sync_client_config_locked(
             };
 
             let existing_item = mcp_servers.get(&dt.tool_id);
-            let is_managed = target_manifest.contains_key(&dt.tool_id);
+            let is_managed = existing_item
+                .and_then(fingerprint_toml_entry)
+                .zip(target_manifest.get(&dt.tool_id))
+                .map(|(actual, expected)| actual == *expected)
+                .unwrap_or(false);
 
             if !dt.is_enabled {
                 if existing_item.is_some() {
@@ -3623,10 +3771,18 @@ pub fn sync_client_config_locked(
 
             let mut missing_fields = Vec::new();
             let mut resolved_env = BTreeMap::new();
+            let mut args_vec: Vec<String> =
+                tool_def.base_args.iter().map(|s| s.to_string()).collect();
             for field in tool_def.fields {
                 match get_vault_secret(&dt.tool_id, field.key) {
                     Ok(val) if !val.is_empty() => {
-                        resolved_env.insert(field.key.to_string(), val);
+                        if field.is_positional {
+                            for arg in val.split(',').map(str::trim).filter(|arg| !arg.is_empty()) {
+                                args_vec.push(arg.to_string());
+                            }
+                        } else {
+                            resolved_env.insert(field.key.to_string(), val);
+                        }
                     }
                     _ => {
                         if field.required {
@@ -3652,7 +3808,6 @@ pub fn sync_client_config_locked(
                 continue;
             }
 
-            let args_vec: Vec<String> = tool_def.base_args.iter().map(|s| s.to_string()).collect();
             let fingerprint = compute_tool_fingerprint(
                 tool_def.command,
                 &args_vec,
@@ -3683,7 +3838,11 @@ pub fn sync_client_config_locked(
             };
 
             let mut server_table = toml_edit::Table::new();
-            server_table.insert("command", toml_edit::value(tool_def.command));
+            if let Some(url) = tool_def.server_url {
+                server_table.insert("url", toml_edit::value(url));
+            } else {
+                server_table.insert("command", toml_edit::value(tool_def.command));
+            }
             let mut args_arr = toml_edit::Array::new();
             for arg in &args_vec {
                 args_arr.push(arg.as_str());
@@ -3762,7 +3921,11 @@ pub fn sync_client_config_locked(
             };
 
             let existing_item = mcp_map.get(&dt.tool_id);
-            let is_managed = target_manifest.contains_key(&dt.tool_id);
+            let is_managed = existing_item
+                .and_then(fingerprint_json_entry)
+                .zip(target_manifest.get(&dt.tool_id))
+                .map(|(actual, expected)| actual == *expected)
+                .unwrap_or(false);
 
             if !dt.is_enabled {
                 if existing_item.is_some() {
@@ -3802,10 +3965,18 @@ pub fn sync_client_config_locked(
 
             let mut missing_fields = Vec::new();
             let mut resolved_env = BTreeMap::new();
+            let mut args_vec: Vec<String> =
+                tool_def.base_args.iter().map(|s| s.to_string()).collect();
             for field in tool_def.fields {
                 match get_vault_secret(&dt.tool_id, field.key) {
                     Ok(val) if !val.is_empty() => {
-                        resolved_env.insert(field.key.to_string(), val);
+                        if field.is_positional {
+                            for arg in val.split(',').map(str::trim).filter(|arg| !arg.is_empty()) {
+                                args_vec.push(arg.to_string());
+                            }
+                        } else {
+                            resolved_env.insert(field.key.to_string(), val);
+                        }
                     }
                     _ => {
                         if field.required {
@@ -3831,7 +4002,6 @@ pub fn sync_client_config_locked(
                 continue;
             }
 
-            let args_vec: Vec<String> = tool_def.base_args.iter().map(|s| s.to_string()).collect();
             let fingerprint = compute_tool_fingerprint(
                 tool_def.command,
                 &args_vec,
@@ -3857,14 +4027,20 @@ pub fn sync_client_config_locked(
                 ToolSyncStatus::Installed
             };
 
-            mcp_map.insert(
-                dt.tool_id.clone(),
+            let entry = if let Some(url) = tool_def.server_url {
+                serde_json::json!({
+                    "type": "http",
+                    "url": url,
+                    "headers": resolved_env,
+                })
+            } else {
                 serde_json::json!({
                     "command": tool_def.command,
                     "args": args_vec,
                     "env": resolved_env,
-                }),
-            );
+                })
+            };
+            mcp_map.insert(dt.tool_id.clone(), entry);
             target_manifest.insert(dt.tool_id.clone(), fingerprint);
 
             tool_results.push(StructuredToolResult {
@@ -4231,6 +4407,10 @@ pub async fn update_budget_limits(
     let resp: BudgetLimitsResponse = serde_json::from_slice(&body)
         .map_err(|e| format!("Failed to decode budget update response: {}", e))?;
 
+    if !resp.success {
+        return Err("Sidecar rejected the budget update".into());
+    }
+
     Ok(resp)
 }
 
@@ -4239,12 +4419,24 @@ pub async fn reset_spend_data(
     supervisor: tauri::State<'_, SidecarSupervisor>,
     client: tauri::State<'_, SignedAdminClient>,
 ) -> Result<ResetSpendResponse, String> {
-    let (body, _) = client
+    let (body, status_code) = client
         .execute_signed_request(&supervisor, reqwest::Method::POST, "/spend/reset", None)
         .await
         .map_err(|e| format!("Signed reset spend failed: {}", e))?;
 
-    serde_json::from_slice(&body).map_err(|e| format!("Failed to decode reset response: {}", e))
+    if status_code != 200 {
+        return Err(format!(
+            "Sidecar spend reset failed with HTTP status {}",
+            status_code
+        ));
+    }
+
+    let response: ResetSpendResponse = serde_json::from_slice(&body)
+        .map_err(|e| format!("Failed to decode reset response: {}", e))?;
+    if !response.success {
+        return Err("Sidecar rejected the spend reset".into());
+    }
+    Ok(response)
 }
 
 #[tauri::command]
@@ -4252,10 +4444,17 @@ pub async fn get_spend_summary(
     supervisor: tauri::State<'_, SidecarSupervisor>,
     client: tauri::State<'_, SignedAdminClient>,
 ) -> Result<SpendSummary, String> {
-    let (body, _) = client
+    let (body, status_code) = client
         .execute_signed_request(&supervisor, reqwest::Method::GET, "/spend/summary", None)
         .await
         .map_err(|e| format!("Signed spend summary failed: {}", e))?;
+
+    if status_code != 200 {
+        return Err(format!(
+            "Sidecar spend summary failed with HTTP status {}",
+            status_code
+        ));
+    }
 
     serde_json::from_slice(&body).map_err(|e| format!("Failed to decode spend summary: {}", e))
 }
@@ -4285,14 +4484,18 @@ pub async fn restart_litellm_sidecar(
 ) -> Result<serde_json::Value, String> {
     let _transition_guard = TRANSITION_LOCK.lock().await;
 
-    let (old_child, old_pid) = {
+    let (old_child, old_pid, old_job) = {
         let mut guard = supervisor.state.lock().unwrap();
         guard.phase = SidecarPhase::Stopping;
-        (guard.child.take(), guard.pid.take())
+        (
+            guard.child.take(),
+            guard.pid.take(),
+            guard.job_handle.take(),
+        )
     };
 
     if let Some(child) = old_child {
-        terminate_sidecar_tree(child, old_pid).await;
+        terminate_sidecar_tree(child, old_pid, old_job).await?;
     }
 
     match spawn_litellm_sidecar(app, supervisor.clone()).await {
@@ -4337,7 +4540,7 @@ pub async fn apply_air_gapped_mode(
     }
 
     if let Some(ref content) = effective_yaml {
-        let rand_suffix = generate_os_random_hex(6);
+        let rand_suffix = generate_os_random_hex(6)?;
         let temp_file = config_path.with_extension(format!("yaml.{}.tmp", rand_suffix));
         fs::write(&temp_file, content.as_bytes()).map_err(|e| format!("Write failed: {}", e))?;
         replace_file_atomically_with_perms(&temp_file, &config_path)?;
@@ -4345,15 +4548,19 @@ pub async fn apply_air_gapped_mode(
 
     persist_air_gapped_state(app_data_dir, enabled)?;
 
-    let (old_child, old_pid) = {
+    let (old_child, old_pid, old_job) = {
         let mut guard = supervisor.state.lock().unwrap();
         guard.is_air_gapped = enabled;
         guard.phase = SidecarPhase::Stopping;
-        (guard.child.take(), guard.pid.take())
+        (
+            guard.child.take(),
+            guard.pid.take(),
+            guard.job_handle.take(),
+        )
     };
 
     if let Some(child) = old_child {
-        terminate_sidecar_tree(child, old_pid).await;
+        terminate_sidecar_tree(child, old_pid, old_job).await?;
     }
 
     match spawn_litellm_sidecar(app, supervisor.clone()).await {
@@ -4427,7 +4634,7 @@ pub fn get_system_paths(app: AppHandle) -> Result<serde_json::Value, String> {
 #[tauri::command]
 pub fn save_litellm_config(app: AppHandle, yaml_content: String) -> Result<(), String> {
     let config_path = resolve_config_path(&app);
-    let rand_suffix = generate_os_random_hex(6);
+    let rand_suffix = generate_os_random_hex(6)?;
     let temp_file = config_path.with_extension(format!("yaml.{}.tmp", rand_suffix));
     fs::write(&temp_file, yaml_content.as_bytes()).map_err(|e| format!("Write failed: {}", e))?;
     replace_file_atomically_with_perms(&temp_file, &config_path)
@@ -4503,25 +4710,39 @@ pub fn read_client_config(
         content.clone()
     };
 
-    let configured_ids = if target == ConfigTarget::Codex {
+    let (configured_ids, schema_valid) = if target == ConfigTarget::Codex {
         let doc: Result<toml_edit::DocumentMut, _> = content.parse();
         match doc {
-            Ok(d) => d
-                .get("mcp_servers")
-                .and_then(|v| v.as_table())
-                .map(|t| t.iter().map(|(k, _)| k.to_string()).collect::<Vec<_>>())
-                .unwrap_or_default(),
-            Err(_) => Vec::new(),
+            Ok(d) => (
+                d.get("mcp_servers")
+                    .and_then(|v| v.as_table())
+                    .map(|t| t.iter().map(|(k, _)| k.to_string()).collect::<Vec<_>>())
+                    .unwrap_or_default(),
+                true,
+            ),
+            Err(_) => (Vec::new(), false),
         }
     } else {
         let val: Result<serde_json::Value, _> = serde_json::from_str(&clean);
         match val {
-            Ok(v) => v
-                .get("mcpServers")
-                .and_then(|s| s.as_object())
-                .map(|o| o.keys().cloned().collect::<Vec<_>>())
-                .unwrap_or_default(),
-            Err(_) => Vec::new(),
+            Ok(v) => {
+                let key = if target == ConfigTarget::Vscode {
+                    "servers"
+                } else {
+                    "mcpServers"
+                };
+                match v.as_object() {
+                    Some(_) => (
+                        v.get(key)
+                            .and_then(|s| s.as_object())
+                            .map(|o| o.keys().cloned().collect::<Vec<_>>())
+                            .unwrap_or_default(),
+                        v.get(key).is_none() || v.get(key).and_then(|s| s.as_object()).is_some(),
+                    ),
+                    None => (Vec::new(), false),
+                }
+            }
+            Err(_) => (Vec::new(), false),
         }
     };
 
@@ -4529,7 +4750,7 @@ pub fn read_client_config(
         "exists": true,
         "revision": ExpectedRevision::Exact(hash),
         "configured_tool_ids": configured_ids,
-        "schema_valid": true,
+        "schema_valid": schema_valid,
     }))
 }
 
@@ -4958,7 +5179,21 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app_handle, _event| {});
+        .run(|app_handle, event| {
+            if matches!(event, RunEvent::Exit) {
+                let supervisor = app_handle.state::<SidecarSupervisor>();
+                let (child, job_handle) = {
+                    let mut guard = supervisor.state.lock().unwrap();
+                    guard.phase = SidecarPhase::Stopping;
+                    guard.pid = None;
+                    (guard.child.take(), guard.job_handle.take())
+                };
+                close_sidecar_job(job_handle);
+                if let Some(child) = child {
+                    let _ = child.kill();
+                }
+            }
+        });
 }
 
 // ---------------------------------------------------------------------------
