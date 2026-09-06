@@ -73,6 +73,13 @@ try:
 except Exception as e:
     print(f"WARNING collecting submodules: {e}")
 
+# setuptools/pkg_resources imports backports.tarfile through a namespace
+# package that PyInstaller 6.12 does not discover reliably on Unix.
+try:
+    hiddenimports += collect_submodules('backports')
+except Exception as e:
+    print(f"WARNING collecting backports namespace: {e}")
+
 # ---------------------------------------------------------------------------
 # Analysis
 # ---------------------------------------------------------------------------
