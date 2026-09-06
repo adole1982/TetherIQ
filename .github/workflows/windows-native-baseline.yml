@@ -101,3 +101,5 @@ jobs:
       - name: Native tests
         if: ${{ !cancelled() }}
         run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets
+        env:
+          TETHER_PACKAGED_SIDECAR_TEST: '1'

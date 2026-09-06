@@ -5551,6 +5551,54 @@ mod tests {
         server.await.unwrap();
     }
 
+    #[tokio::test]
+    async fn test_tauri_shell_launches_packaged_litellm_sidecar() {
+        if std::env::var("TETHER_PACKAGED_SIDECAR_TEST").as_deref() != Ok("1") {
+            return;
+        }
+
+        let app = tauri::test::mock_builder()
+            .plugin(tauri_plugin_shell::init())
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .expect("failed to build Tauri sidecar integration app");
+        let app_handle = app.handle().clone();
+        let config_path = super::resolve_config_path(&app_handle);
+        if let Some(parent) = config_path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(
+            &config_path,
+            b"model_list:\n  - model_name: local-smoke\n    litellm_params:\n      model: ollama/smoke\n      api_base: http://127.0.0.1:9\n",
+        )
+        .unwrap();
+
+        let supervisor = SidecarSupervisor::default();
+        {
+            let mut state = supervisor.state.lock().unwrap();
+            state.is_air_gapped = true;
+        }
+
+        let child = super::spawn_litellm_sidecar(app_handle, supervisor.state.clone())
+            .await
+            .expect("Tauri shell failed to launch and attest the packaged LiteLLM sidecar");
+        let (pid, job_handle, phase, port) = {
+            let mut state = supervisor.state.lock().unwrap();
+            (
+                state.pid,
+                state.job_handle.take(),
+                state.phase.clone(),
+                state.bound_port,
+            )
+        };
+        assert_eq!(phase, super::SidecarPhase::Ready);
+        assert!(port > 1024);
+
+        super::terminate_sidecar_tree(child, pid, job_handle)
+            .await
+            .expect("Tauri-launched LiteLLM process tree did not terminate");
+        let _ = std::fs::remove_file(config_path);
+    }
+
     #[test]
     fn test_revocation_fails_closed_at_malformed_json_boundary() {
         let malformed = br#"{"mcpServers":{"github":{"command":"npx"}}"#.to_vec();
