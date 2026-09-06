@@ -731,7 +731,7 @@ pub async fn spawn_litellm_sidecar(
                                 .build()
                                 .unwrap_or_default();
                             let probe_url =
-                                format!("http://127.0.0.1:{}/health/readiness", rec_port);
+                                format!("http://127.0.0.1:{}/tether/readiness", rec_port);
                             match client.get(&probe_url).send().await {
                                 Ok(resp) if resp.status().is_success() => {
                                     let readiness = resp
@@ -5578,16 +5578,18 @@ mod tests {
             state.is_air_gapped = true;
         }
 
-        let child = super::spawn_litellm_sidecar(app_handle, supervisor.state.clone())
+        let child = super::spawn_litellm_sidecar(app_handle.clone(), supervisor.state.clone())
             .await
             .expect("Tauri shell failed to launch and attest the packaged LiteLLM sidecar");
-        let (pid, job_handle, phase, port) = {
+        let (pid, job_handle, phase, port, first_generation, first_instance) = {
             let mut state = supervisor.state.lock().unwrap();
             (
                 state.pid,
                 state.job_handle.take(),
                 state.phase.clone(),
                 state.bound_port,
+                state.generation,
+                state.instance_id.clone(),
             )
         };
         assert_eq!(phase, super::SidecarPhase::Ready);
@@ -5596,6 +5598,32 @@ mod tests {
         super::terminate_sidecar_tree(child, pid, job_handle)
             .await
             .expect("Tauri-launched LiteLLM process tree did not terminate");
+
+        let restarted_child = super::spawn_litellm_sidecar(app_handle, supervisor.state.clone())
+            .await
+            .expect("Tauri shell failed to restart the packaged LiteLLM sidecar");
+        let (
+            restarted_pid,
+            restarted_job,
+            restarted_phase,
+            restarted_generation,
+            restarted_instance,
+        ) = {
+            let mut state = supervisor.state.lock().unwrap();
+            (
+                state.pid,
+                state.job_handle.take(),
+                state.phase.clone(),
+                state.generation,
+                state.instance_id.clone(),
+            )
+        };
+        assert_eq!(restarted_phase, super::SidecarPhase::Ready);
+        assert_eq!(restarted_generation, first_generation + 1);
+        assert_ne!(restarted_instance, first_instance);
+        super::terminate_sidecar_tree(restarted_child, restarted_pid, restarted_job)
+            .await
+            .expect("Restarted LiteLLM process tree did not terminate");
         let _ = std::fs::remove_file(config_path);
     }
 
