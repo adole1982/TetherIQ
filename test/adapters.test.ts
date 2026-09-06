@@ -804,33 +804,27 @@ async function testBackupAndDiskWrites() {
     const lockedRead = await ConfigSyncService.readConfigFileSafely(lockedTarget);
 
     // Force the final atomic rename to fail identically on every supported OS.
-    const originalRenameSync = fs.renameSync;
-    (fs as any).renameSync = (oldPath: fs.PathLike, newPath: fs.PathLike) => {
-      if (path.resolve(String(newPath)) === path.resolve(lockedTarget)) {
-        const error = new Error('injected atomic rename failure') as NodeJS.ErrnoException;
-        error.code = 'EACCES';
-        throw error;
+    const partialRes = await ConfigSyncService.writeConfigFileSafely(
+      lockedTarget,
+      JSON.stringify({ mcpServers: { updated: true } }),
+      true,
+      undefined,
+      lockedRead.revision,
+      {
+        renameSync: () => {
+          const error = new Error('injected atomic rename failure') as NodeJS.ErrnoException;
+          error.code = 'EACCES';
+          throw error;
+        }
       }
-      return originalRenameSync(oldPath, newPath);
-    };
-    try {
-      const partialRes = await ConfigSyncService.writeConfigFileSafely(
-        lockedTarget,
-        JSON.stringify({ mcpServers: { updated: true } }),
-        true,
-        undefined,
-        lockedRead.revision
-      );
+    );
 
-      assert(partialRes.success === false, 'Rename failure returns success: false (M-04)');
-      assert(partialRes.errorCode === 'rename_failed', 'Rename failure returns errorCode: rename_failed (M-04)');
-      assert(
-        typeof partialRes.backupCreated === 'string' && fs.existsSync(partialRes.backupCreated),
-        'Rename failure truthfully reports valid, existing backupCreated path for user recovery (M-04)'
-      );
-    } finally {
-      (fs as any).renameSync = originalRenameSync;
-    }
+    assert(partialRes.success === false, 'Rename failure returns success: false (M-04)');
+    assert(partialRes.errorCode === 'rename_failed', 'Rename failure returns errorCode: rename_failed (M-04)');
+    assert(
+      typeof partialRes.backupCreated === 'string' && fs.existsSync(partialRes.backupCreated),
+      'Rename failure truthfully reports valid, existing backupCreated path for user recovery (M-04)'
+    );
 
     // 12. Backup Retention Limit: Prunes oldest backups beyond 5
     const retentionTarget = path.join(testDir, 'retention_test.json');

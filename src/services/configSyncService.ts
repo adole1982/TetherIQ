@@ -834,7 +834,8 @@ export class ConfigSyncService {
     content: string,
     createBackup: boolean = true,
     filePath?: string,
-    expectedRevision?: ExpectedRevision
+    expectedRevision?: ExpectedRevision,
+    nodeTestHooks?: { renameSync?: (oldPath: string, newPath: string) => void }
   ): Promise<{ success: boolean; backupCreated?: string; error?: string; errorCode?: string }> {
     try {
       const isTargetId = TARGET_CLIENTS_META.some(m => m.id === targetOrPath);
@@ -974,7 +975,7 @@ export class ConfigSyncService {
         }
 
         try {
-          fs.renameSync(tempPath, path);
+          (nodeTestHooks?.renameSync ?? fs.renameSync)(tempPath, path);
           return { success: true, backupCreated };
         } catch (renameErr: any) {
           if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
