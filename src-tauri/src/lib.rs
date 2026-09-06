@@ -4288,14 +4288,10 @@ fn get_proxy_status(
     }))
 }
 
-#[tauri::command]
-fn copy_gateway_environment(
-    supervisor: tauri::State<'_, SidecarSupervisor>,
-    client: String,
-) -> Result<(), String> {
-    use std::io::Write as IoWrite;
-    use std::process::Stdio;
-
+fn gateway_environment_content(
+    supervisor: &SidecarSupervisor,
+    client: &str,
+) -> Result<String, String> {
     let (port, gateway_token) = {
         let guard = supervisor.state.lock().unwrap();
         if guard.phase != SidecarPhase::Ready || guard.bound_port == 0 {
@@ -4307,7 +4303,21 @@ fn copy_gateway_environment(
         (guard.bound_port, guard.gateway_token.clone())
     };
 
-    let content = match client.as_str() {
+    #[cfg(target_os = "windows")]
+    let content = match client {
+        "anthropic" => format!(
+            "$env:ANTHROPIC_BASE_URL = \"http://127.0.0.1:{}\"\n$env:ANTHROPIC_API_KEY = \"{}\"",
+            port, gateway_token
+        ),
+        "openai" => format!(
+            "$env:OPENAI_BASE_URL = \"http://127.0.0.1:{}/v1\"\n$env:OPENAI_API_KEY = \"{}\"",
+            port, gateway_token
+        ),
+        _ => return Err("Unsupported gateway client".to_string()),
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let content = match client {
         "anthropic" => format!(
             "export ANTHROPIC_BASE_URL=http://127.0.0.1:{}\nexport ANTHROPIC_API_KEY={}",
             port, gateway_token
@@ -4318,6 +4328,19 @@ fn copy_gateway_environment(
         ),
         _ => return Err("Unsupported gateway client".to_string()),
     };
+
+    Ok(content)
+}
+
+#[tauri::command]
+fn copy_gateway_environment(
+    supervisor: tauri::State<'_, SidecarSupervisor>,
+    client: String,
+) -> Result<(), String> {
+    use std::io::Write as IoWrite;
+    use std::process::Stdio;
+
+    let content = gateway_environment_content(supervisor.inner(), &client)?;
 
     #[cfg(target_os = "windows")]
     let mut command = {
@@ -5350,13 +5373,36 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        constant_time_eq_hex, parse_codex_config, parse_json_client_config, sha256_hex,
-        validate_external_url, validate_numeric_loopback_url, BudgetLimitsPayload,
-        DesiredToolState, ExpectedRevision, SidecarSupervisor, SignedAdminClient,
-        ToolAssignmentState, ToolCredentialMutation, ToolSyncStatus, TriState,
+        constant_time_eq_hex, gateway_environment_content, parse_codex_config,
+        parse_json_client_config, sha256_hex, validate_external_url, validate_numeric_loopback_url,
+        BudgetLimitsPayload, DesiredToolState, ExpectedRevision, SidecarPhase, SidecarSupervisor,
+        SignedAdminClient, ToolAssignmentState, ToolCredentialMutation, ToolSyncStatus, TriState,
     };
     use std::fmt::Write;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[test]
+    fn gateway_environment_uses_the_supervised_port_and_platform_shell() {
+        let supervisor = SidecarSupervisor::default();
+        {
+            let mut state = supervisor.state.lock().unwrap();
+            state.phase = SidecarPhase::Ready;
+            state.bound_port = 48123;
+            state.gateway_token = "test-gateway-token".to_string();
+        }
+
+        let content = gateway_environment_content(&supervisor, "anthropic").unwrap();
+        #[cfg(target_os = "windows")]
+        assert_eq!(
+            content,
+            "$env:ANTHROPIC_BASE_URL = \"http://127.0.0.1:48123\"\n$env:ANTHROPIC_API_KEY = \"test-gateway-token\""
+        );
+        #[cfg(not(target_os = "windows"))]
+        assert_eq!(
+            content,
+            "export ANTHROPIC_BASE_URL=http://127.0.0.1:48123\nexport ANTHROPIC_API_KEY=test-gateway-token"
+        );
+    }
 
     #[tauri::command]
     fn ipc_contract_probe(

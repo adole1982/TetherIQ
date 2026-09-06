@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   X, 
   Sparkles, 
@@ -26,7 +26,9 @@ export const QuickstartModal: React.FC = () => {
     updateProvider, 
     budget, 
     updateBudgetLimits,
-    syncAllTools
+    syncAllTools,
+    proxyPort,
+    fetchGatewayHealth,
   } = useTetherStore();
   
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
@@ -36,11 +38,34 @@ export const QuickstartModal: React.FC = () => {
   const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
   const [pingStatus, setPingStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle');
   const [pingMessage, setPingMessage] = useState<string>('');
+  const [gatewayPort, setGatewayPort] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isQuickstartOpen) return;
+
+    void fetchGatewayHealth();
+    if (typeof window === 'undefined' || !(window as any).__TAURI__) return;
+
+    void (async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const diagnostics = await invoke<{ proxy_port: number }>('get_gateway_diagnostics');
+        if (diagnostics.proxy_port > 0) setGatewayPort(diagnostics.proxy_port);
+      } catch {
+        setGatewayPort(null);
+      }
+    })();
+  }, [fetchGatewayHealth, isQuickstartOpen]);
 
   if (!isQuickstartOpen) return null;
 
-  const handleCopy = (id: string, text: string) => {
-    navigator.clipboard.writeText(text);
+  const handleCopy = async (id: string, text: string) => {
+    if (id === 'claude-code' && typeof window !== 'undefined' && (window as any).__TAURI__) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('copy_gateway_environment', { client: 'anthropic' });
+    } else {
+      await navigator.clipboard.writeText(text);
+    }
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
@@ -79,18 +104,38 @@ export const QuickstartModal: React.FC = () => {
   const handleTestConnection = async () => {
     setPingStatus('checking');
     try {
-      const res = await fetch('http://127.0.0.1:4000/health/liveliness');
+      let port = gatewayPort || proxyPort;
+      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const diagnostics = await invoke<{ proxy_running: boolean; proxy_port: number }>('get_gateway_diagnostics');
+        if (!diagnostics.proxy_running || diagnostics.proxy_port <= 0) {
+          throw new Error('The LiteLLM sidecar is still starting or failed to start.');
+        }
+        port = diagnostics.proxy_port;
+        setGatewayPort(port);
+      }
+
+      const res = await fetch(`http://127.0.0.1:${port}/tether/readiness`);
       if (res.ok) {
         setPingStatus('ok');
-        setPingMessage('Proxy Loopback Active (127.0.0.1:4000) — Sub-5ms Ready');
+        setPingMessage(`LiteLLM gateway ready at 127.0.0.1:${port}`);
       } else {
         setPingStatus('error');
         setPingMessage(`Gateway returned HTTP ${res.status}`);
       }
     } catch (err: any) {
       setPingStatus('error');
-      setPingMessage('Could not reach 127.0.0.1:4000. Is the sidecar running?');
+      setPingMessage(err?.message || 'Could not verify the LiteLLM gateway.');
     }
+  };
+
+  const configuredPort = gatewayPort || proxyPort;
+  const gatewayBaseUrl = `http://127.0.0.1:${configuredPort}`;
+  const snippetFor = (client: ClientIntegrationGuide) => {
+    if (client.id === 'claude-code') {
+      return `Click Copy Snippet, paste it into a new terminal, then run:\nclaude\n\nThe copied values connect this terminal session to ${gatewayBaseUrl}.`;
+    }
+    return client.commandSnippet.replaceAll('http://127.0.0.1:4000', gatewayBaseUrl);
   };
 
   const handleCompleteWizard = async () => {
@@ -304,7 +349,7 @@ export const QuickstartModal: React.FC = () => {
                       </div>
 
                       <button
-                        onClick={() => handleCopy(client.id, client.commandSnippet)}
+                        onClick={() => void handleCopy(client.id, snippetFor(client))}
                         className="flex items-center space-x-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 transition-colors"
                       >
                         {copiedId === client.id ? (
@@ -322,7 +367,7 @@ export const QuickstartModal: React.FC = () => {
                     </div>
 
                     <pre className="font-mono text-xs text-cyan-300 bg-slate-900/90 p-2 rounded border border-slate-800/80 overflow-x-auto">
-                      {client.commandSnippet}
+                      {snippetFor(client)}
                     </pre>
                   </div>
                 ))}
