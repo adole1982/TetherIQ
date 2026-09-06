@@ -317,7 +317,7 @@ pub fn replace_file_atomically_with_perms(
     Ok(())
 }
 
-pub fn resolve_config_path(app: &AppHandle) -> PathBuf {
+pub fn resolve_config_path<R: tauri::Runtime>(app: &AppHandle<R>) -> PathBuf {
     let app_dir = app
         .path()
         .app_data_dir()
@@ -559,8 +559,8 @@ pub fn build_child_environment(
     env
 }
 
-pub async fn spawn_litellm_sidecar(
-    app: AppHandle,
+pub async fn spawn_litellm_sidecar<R: tauri::Runtime>(
+    app: AppHandle<R>,
     supervisor_state: Arc<Mutex<SidecarSupervisorState>>,
 ) -> Result<CommandChild, String> {
     let secret = generate_os_random_hex(32)?;
