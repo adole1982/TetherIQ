@@ -9,6 +9,10 @@ on:
       - "src/**"
       - ".github/workflows/windows-native-baseline.yml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
