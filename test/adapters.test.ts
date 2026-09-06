@@ -803,8 +803,16 @@ async function testBackupAndDiskWrites() {
     fs.writeFileSync(lockedTarget, JSON.stringify({ mcpServers: { initial: true } }));
     const lockedRead = await ConfigSyncService.readConfigFileSafely(lockedTarget);
 
-    // On Windows, keeping an open handle locks the file from being replaced/renamed over
-    const lockFd = fs.openSync(lockedTarget, 'r+');
+    // Force the final atomic rename to fail identically on every supported OS.
+    const originalRenameSync = fs.renameSync;
+    (fs as any).renameSync = (oldPath: fs.PathLike, newPath: fs.PathLike) => {
+      if (path.resolve(String(newPath)) === path.resolve(lockedTarget)) {
+        const error = new Error('injected atomic rename failure') as NodeJS.ErrnoException;
+        error.code = 'EACCES';
+        throw error;
+      }
+      return originalRenameSync(oldPath, newPath);
+    };
     try {
       const partialRes = await ConfigSyncService.writeConfigFileSafely(
         lockedTarget,
@@ -821,7 +829,7 @@ async function testBackupAndDiskWrites() {
         'Rename failure truthfully reports valid, existing backupCreated path for user recovery (M-04)'
       );
     } finally {
-      fs.closeSync(lockFd);
+      (fs as any).renameSync = originalRenameSync;
     }
 
     // 12. Backup Retention Limit: Prunes oldest backups beyond 5
@@ -1911,4 +1919,3 @@ async function runAllTests() {
 }
 
 runAllTests();
-
