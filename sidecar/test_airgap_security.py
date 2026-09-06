@@ -118,6 +118,43 @@ def run_tests():
         test_sock_host.close()
     check(host_blocked, "Process-wide socket guard aborts socket.connect to external hostname (api.openai.com)")
 
+    # 4. Prove the guard decision against a reachable controlled listener. The
+    # hostname attempt must be denied before the OS connects, while the same
+    # listener remains reachable through its numeric loopback address.
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.settimeout(2)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    listener_port = listener.getsockname()[1]
+
+    hostname_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    hostname_listener_blocked = False
+    try:
+        hostname_client.connect(("localhost", listener_port))
+    except PermissionError:
+        hostname_listener_blocked = True
+    finally:
+        hostname_client.close()
+    check(
+        hostname_listener_blocked,
+        "Guard blocks a hostname connection even when a controlled listener is reachable",
+    )
+
+    loopback_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    accepted = None
+    try:
+        loopback_client.connect(("127.0.0.1", listener_port))
+        accepted, _ = listener.accept()
+        check(
+            loopback_client.getpeername()[1] == listener_port,
+            "Guard permits the same controlled listener through numeric loopback",
+        )
+    finally:
+        if accepted is not None:
+            accepted.close()
+        loopback_client.close()
+        listener.close()
+
     print("\n[Suite 3: Transitive Routing Graph & Multi-Node Cycle Validation]")
 
     # Case A: Valid 100% local air-gapped configuration with LM Studio and Ollama

@@ -3638,6 +3638,27 @@ pub fn save_manifest(app_data_dir: &Path, manifest: &ManagedMcpManifest) -> Resu
     replace_file_atomically_with_perms(&temp_file, &manifest_file)
 }
 
+fn parse_codex_config(current_bytes: Vec<u8>) -> Result<toml_edit::DocumentMut, String> {
+    let content = String::from_utf8(current_bytes).map_err(|e| format!("Invalid UTF-8: {}", e))?;
+    content
+        .parse()
+        .map_err(|e| format!("Failed to parse TOML: {}", e))
+}
+
+fn parse_json_client_config(
+    current_bytes: Vec<u8>,
+    is_jsonc: bool,
+) -> Result<serde_json::Value, String> {
+    let content = String::from_utf8(current_bytes).map_err(|e| format!("Invalid UTF-8: {}", e))?;
+    let clean = if is_jsonc {
+        strip_jsonc_comments(&content)
+    } else {
+        content
+    };
+    serde_json::from_str(&clean)
+        .map_err(|e| format!("Refusing to overwrite malformed JSON configuration: {}", e))
+}
+
 pub fn sync_client_config_locked(
     app: &AppHandle,
     target: ConfigTarget,
@@ -3710,11 +3731,7 @@ pub fn sync_client_config_locked(
 
     if target == ConfigTarget::Codex {
         let mut doc: toml_edit::DocumentMut = if file_exists {
-            let content =
-                String::from_utf8(current_bytes).map_err(|e| format!("Invalid UTF-8: {}", e))?;
-            content
-                .parse()
-                .map_err(|e| format!("Failed to parse TOML: {}", e))?
+            parse_codex_config(current_bytes)?
         } else {
             toml_edit::DocumentMut::new()
         };
@@ -3887,15 +3904,7 @@ pub fn sync_client_config_locked(
         save_manifest(&app_data_dir, &manifest)?;
     } else {
         let mut root_val: serde_json::Value = if file_exists {
-            let content =
-                String::from_utf8(current_bytes).map_err(|e| format!("Invalid UTF-8: {}", e))?;
-            let clean = if is_jsonc {
-                strip_jsonc_comments(&content)
-            } else {
-                content
-            };
-            serde_json::from_str(&clean)
-                .map_err(|e| format!("Refusing to overwrite malformed JSON configuration: {}", e))?
+            parse_json_client_config(current_bytes, is_jsonc)?
         } else {
             serde_json::json!({})
         };
@@ -5341,9 +5350,10 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        constant_time_eq_hex, sha256_hex, validate_external_url, validate_numeric_loopback_url,
-        BudgetLimitsPayload, DesiredToolState, ExpectedRevision, SidecarSupervisor,
-        SignedAdminClient, ToolAssignmentState, ToolCredentialMutation, ToolSyncStatus, TriState,
+        constant_time_eq_hex, parse_codex_config, parse_json_client_config, sha256_hex,
+        validate_external_url, validate_numeric_loopback_url, BudgetLimitsPayload,
+        DesiredToolState, ExpectedRevision, SidecarSupervisor, SignedAdminClient,
+        ToolAssignmentState, ToolCredentialMutation, ToolSyncStatus, TriState,
     };
     use std::fmt::Write;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -5539,6 +5549,22 @@ mod tests {
             "Response body exceeded 64KB maximum limit. Truncating and failing closed."
         );
         server.await.unwrap();
+    }
+
+    #[test]
+    fn test_revocation_fails_closed_at_malformed_json_boundary() {
+        let malformed = br#"{"mcpServers":{"github":{"command":"npx"}}"#.to_vec();
+        let result = parse_json_client_config(malformed, false);
+        assert!(result
+            .unwrap_err()
+            .starts_with("Refusing to overwrite malformed JSON configuration:"));
+    }
+
+    #[test]
+    fn test_revocation_fails_closed_at_malformed_toml_boundary() {
+        let malformed = b"[mcp_servers.github\ncommand = 'npx'\n".to_vec();
+        let result = parse_codex_config(malformed);
+        assert!(result.unwrap_err().starts_with("Failed to parse TOML:"));
     }
 
     #[test]

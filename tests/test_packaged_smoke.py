@@ -1,114 +1,175 @@
-"""
-TetherMesh Packaged Application Smoke Test
-Verifies packaged filesystem layout, PE headers, Tauri externalBin alignment,
-port 0 socket binding, [TETHER_READY] stdout emission, and process tree termination.
-"""
+"""Cross-platform smoke test for the frozen LiteLLM sidecar distribution."""
 
-import os
-import sys
+from __future__ import annotations
+
+import argparse
+import hashlib
+import http.client
 import json
-import time
+import os
+import queue
+import signal
 import subprocess
+import tempfile
+import threading
+import time
+from pathlib import Path
 
-def run_packaged_smoke_test():
-    project_root = "c:\\Projects\\TetherIQ"
-    tauri_conf_path = os.path.join(project_root, "src-tauri", "tauri.conf.json")
-    binaries_dir = os.path.join(project_root, "src-tauri", "binaries")
-    target_triple = "x86_64-pc-windows-msvc"
-    
-    primary_exe = os.path.join(binaries_dir, f"litellm-proxy-{target_triple}.exe")
-    onedir_exe = os.path.join(binaries_dir, f"litellm-proxy-{target_triple}", "litellm-proxy.exe")
 
-    print("============================================================")
-    print("   TetherMesh Packaged Application & Sidecar Smoke Test    ")
-    print("============================================================")
+def _terminate_process_tree(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
 
-    # 1. Verify tauri.conf.json configuration
-    assert os.path.exists(tauri_conf_path), f"Missing {tauri_conf_path}"
-    with open(tauri_conf_path, "r", encoding="utf-8") as f:
-        conf = json.load(f)
-    ext_bin = conf.get("bundle", {}).get("externalBin", [])
-    assert "binaries/litellm-proxy" in ext_bin, f"externalBin must contain 'binaries/litellm-proxy', got {ext_bin}"
-    print("  [+] tauri.conf.json externalBin configuration verified")
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
 
-    # 2. Verify primary binary exists and has PE header
-    assert os.path.exists(primary_exe), f"Primary sidecar binary not found at {primary_exe}"
-    with open(primary_exe, "rb") as f:
-        header = f.read(2)
-        assert header == b"MZ", f"File at {primary_exe} does not have valid PE MZ header (got {header})"
-    file_size_mb = os.path.getsize(primary_exe) / (1024 * 1024)
-    print(f"  [+] Primary binary validated: {primary_exe} ({file_size_mb:.1f} MB, PE header OK)")
-
-    # 3. Verify onedir layout exists
-    assert os.path.exists(onedir_exe), f"Onedir sidecar binary not found at {onedir_exe}"
-    print(f"  [+] Onedir distribution validated: {onedir_exe}")
-
-    # 4. Supervised startup test with port 0
-    test_secret = "test_handshake_secret_smoke_abc12345"
-    test_instance = "tether_smoke_test_instance"
-    test_gen = "42"
-
-    env = dict(os.environ)
-    env["TETHER_SUPERVISED"] = "1"
-    env["TETHER_HANDSHAKE_SECRET"] = test_secret
-    env["TETHER_INSTANCE_ID"] = test_instance
-    env["TETHER_GENERATION"] = test_gen
-    env["AIR_GAPPED_MODE"] = "1"
-    env["PYTHONUNBUFFERED"] = "1"
-
-    cmd = [onedir_exe, "--port", "0"]
-    print(f"  [+] Launching packaged sidecar: {' '.join(cmd)}")
-    
-    proc = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env=env,
-        bufsize=1
-    )
-
-    ready_record = None
-    start_time = time.time()
     try:
-        while time.time() - start_time < 15:
-            line = proc.stdout.readline()
-            if not line:
-                if proc.poll() is not None:
-                    break
-                time.sleep(0.1)
-                continue
-
-            if "[TETHER_READY]:" in line:
-                payload_str = line.split("[TETHER_READY]:", 1)[1].strip()
-                ready_record = json.loads(payload_str)
-                break
-
-        assert ready_record is not None, "Failed to receive [TETHER_READY] within 15 seconds"
-        print(f"  [+] Received valid [TETHER_READY] banner: {ready_record}")
-        assert ready_record["instance_id"] == test_instance, f"Instance ID mismatch: {ready_record['instance_id']}"
-        assert ready_record["generation"] == int(test_gen), f"Generation mismatch: {ready_record['generation']}"
-        assert ready_record["port"] > 1024, f"Port must be valid ephemeral port: {ready_record['port']}"
-        assert ready_record["air_gapped"] is True, f"Air-gapped state mismatch: {ready_record['air_gapped']}"
-        print(f"  [+] Bound port {ready_record['port']} dynamically assigned via OS socket.bind(0)")
-
-    finally:
-        # 5. Clean Process-Tree Termination
-        print("  [+] Terminating packaged sidecar process tree...")
-        if proc.poll() is None:
-            if sys.platform == "win32":
-                subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            else:
-                proc.terminate()
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        if os.name == "nt":
+            process.kill()
+        else:
             try:
-                proc.wait(timeout=5)
-            except Exception:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
                 pass
-        print("  [+] Process tree cleanly terminated with zero orphans.")
+        process.wait(timeout=5)
 
-    print("------------------------------------------------------------")
-    print("[PASS] PACKAGED APPLICATION SMOKE TEST PASSED SUCCESSFULLY")
-    print("------------------------------------------------------------")
+
+def _read_lines(stream, output: queue.Queue[str]) -> None:
+    for line in iter(stream.readline, ""):
+        output.put(line)
+
+
+def run_packaged_smoke_test(executable: Path) -> None:
+    executable = executable.resolve(strict=True)
+    if os.name != "nt" and not os.access(executable, os.X_OK):
+        raise AssertionError(f"Sidecar is not executable: {executable}")
+
+    config = """model_list:
+  - model_name: local-smoke
+    litellm_params:
+      model: ollama/smoke
+      api_base: http://127.0.0.1:9
+"""
+    config_hash = hashlib.sha256(config.encode("utf-8")).hexdigest()
+
+    with tempfile.TemporaryDirectory(prefix="tetheriq-litellm-smoke-") as temp_dir:
+        config_path = Path(temp_dir) / "litellm-smoke.yaml"
+        config_path.write_text(config, encoding="utf-8", newline="\n")
+
+        env = dict(os.environ)
+        env.update(
+            {
+                "TETHER_SUPERVISED": "1",
+                "TETHER_HANDSHAKE_SECRET": "ci-handshake-secret",
+                "TETHER_GATEWAY_TOKEN": "ci-gateway-token",
+                "TETHER_INSTANCE_ID": "ci-packaged-smoke",
+                "TETHER_GENERATION": "7",
+                "TETHER_CONFIG_HASH": config_hash,
+                "AIR_GAPPED_MODE": "1",
+                "PYTHONUNBUFFERED": "1",
+            }
+        )
+
+        popen_options = {
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.STDOUT,
+            "text": True,
+            "encoding": "utf-8",
+            "errors": "replace",
+            "env": env,
+            "bufsize": 1,
+        }
+        if os.name == "nt":
+            popen_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            popen_options["start_new_session"] = True
+
+        process = subprocess.Popen(
+            [str(executable), "--port", "0", "--config", str(config_path)],
+            **popen_options,
+        )
+        lines: queue.Queue[str] = queue.Queue()
+        reader = threading.Thread(
+            target=_read_lines,
+            args=(process.stdout, lines),
+            daemon=True,
+        )
+        reader.start()
+
+        ready_record = None
+        captured = []
+        try:
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                if process.poll() is not None and lines.empty():
+                    break
+                try:
+                    line = lines.get(timeout=0.25)
+                except queue.Empty:
+                    continue
+                captured.append(line)
+                if "[TETHER_READY]:" in line:
+                    ready_record = json.loads(line.split("[TETHER_READY]:", 1)[1])
+                    break
+
+            assert ready_record is not None, (
+                "Frozen LiteLLM sidecar failed to become ready. Output:\n"
+                + "".join(captured)
+            )
+            assert ready_record["instance_id"] == "ci-packaged-smoke"
+            assert ready_record["generation"] == 7
+            assert ready_record["config_hash"] == config_hash
+            assert ready_record["air_gapped"] is True
+            assert 1024 < ready_record["port"] <= 65535
+
+            connection = http.client.HTTPConnection(
+                "127.0.0.1", ready_record["port"], timeout=3
+            )
+            try:
+                connection.request("GET", "/tether/readiness")
+                response = connection.getresponse()
+                payload = json.loads(response.read(65536).decode("utf-8"))
+            finally:
+                connection.close()
+
+            assert response.status == 200
+            assert payload["status"] == "ready"
+            assert payload["instanceId"] == "ci-packaged-smoke"
+            assert payload["generation"] == 7
+            assert payload["configSha256"] == config_hash
+            assert payload["airGapped"] is True
+        finally:
+            _terminate_process_tree(process)
+
+        assert process.poll() is not None, "Frozen LiteLLM process remained alive"
+        if os.name != "nt":
+            try:
+                os.killpg(process.pid, 0)
+            except ProcessLookupError:
+                pass
+            else:
+                raise AssertionError("Frozen LiteLLM process group remained alive")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--executable", required=True, type=Path)
+    args = parser.parse_args()
+    run_packaged_smoke_test(args.executable)
+    print("Packaged LiteLLM sidecar readiness and process-tree smoke test passed.")
+
 
 if __name__ == "__main__":
-    run_packaged_smoke_test()
+    main()

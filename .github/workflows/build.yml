@@ -76,6 +76,9 @@ jobs:
           fi
           cp -R sidecar/dist/litellm-proxy/_internal src-tauri/binaries/_internal
 
+      - name: Smoke-test packaged LiteLLM sidecar and process tree
+        run: python tests/test_packaged_smoke.py --executable "${{ matrix.platform.py_sidecar_out }}"
+
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
