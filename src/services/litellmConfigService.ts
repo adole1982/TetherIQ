@@ -51,7 +51,7 @@ function getCredentialBlock(provider: ProviderConfig): ProviderCredentialBlock {
     case 'groq':
       return { api_key: 'os.environ/GROQ_API_KEY' };
     case 'ollama':
-      return { api_base: provider.baseUrl || 'http://localhost:11434' };
+      return { api_base: provider.baseUrl || 'http://127.0.0.1:11434' };
     default:
       return {};
   }
@@ -90,101 +90,157 @@ export interface LiteLLMConfigInput {
   fallbackChains: FallbackChain[];
   virtualAliases: VirtualModelAlias[];
   budget: SpendBudget;
+  isAirGappedMode?: boolean;
+  discoveredLocalModels?: string[];
 }
 
 /**
  * Generate a complete `litellm_config.yaml` from TetherMesh store state.
  */
 export function generateLiteLLMConfig(input: LiteLLMConfigInput): string {
-  const { providers, fallbackChains, virtualAliases, budget } = input;
+  const { providers, fallbackChains, virtualAliases, budget, isAirGappedMode, discoveredLocalModels = [] } = input;
 
-  const enabledProviders = providers.filter((p) => p.isEnabled);
+  // In Air-Gapped mode, strictly allow local providers (Ollama / Local OpenAI endpoints)
+  const enabledProviders = isAirGappedMode
+    ? providers.filter((p) => p.id === 'ollama')
+    : providers.filter((p) => p.isEnabled);
   const providerMap = new Map(enabledProviders.map((p) => [p.id, p]));
 
   const lines: string[] = [
     '# TetherMesh LiteLLM Configuration — Auto-generated',
     `# Generated at: ${new Date().toISOString()}`,
+    `# Mode: ${isAirGappedMode ? 'AIR-GAPPED / OFFLINE LOCAL MESH ONLY' : 'HYBRID CLOUD & LOCAL'}`,
     '# Edit via the TetherMesh desktop UI (Matrix tab) or modify this file directly.',
     '',
     'model_list:',
   ];
 
-  // --- Generate model_list entries from fallback chains + virtual aliases ---
-  for (const alias of virtualAliases) {
-    const chain = fallbackChains.find((c) => c.id === alias.targetChainId);
-    if (!chain) continue;
+  // If Air-Gapped mode is active, strictly bind virtual aliases and models to loopback local engines
+  if (isAirGappedMode) {
+    const localOllama = providerMap.get('ollama');
+    const rawOllamaBaseUrl = localOllama?.baseUrl || 'http://127.0.0.1:11434';
+    const ollamaBaseUrl = rawOllamaBaseUrl.replace('//localhost:', '//127.0.0.1:').replace('//localhost/', '//127.0.0.1/');
+    const lmStudioBaseUrl = 'http://127.0.0.1:1234/v1';
+    const primaryLocalModel = discoveredLocalModels[0] || 'ollama/llama3.2';
+    const primaryBaseUrl = (primaryLocalModel.startsWith('openai/') || primaryLocalModel.startsWith('lm-studio/'))
+      ? lmStudioBaseUrl
+      : ollamaBaseUrl;
 
-    lines.push(`  # --- ${alias.alias} virtual alias ---`);
-
-    for (const node of chain.nodes) {
-      const provider = providerMap.get(node.provider);
-      if (!provider) continue;
-
-      const prefix = PROVIDER_PREFIX[node.provider] || '';
-      const litellmModel = prefix + node.modelIdentifier;
-      const creds = getCredentialBlock(provider);
-
+    lines.push('  # --- Air-Gapped Offline Local Mesh Aliases ---');
+    for (const alias of virtualAliases) {
       lines.push(`  - model_name: ${alias.alias}`);
       lines.push(`    litellm_params:`);
-      lines.push(`      model: ${litellmModel}`);
+      lines.push(`      model: ${primaryLocalModel}`);
+      lines.push(`      api_base: ${yamlValue(primaryBaseUrl)}`);
+      lines.push('');
+    }
 
+    for (const localMod of discoveredLocalModels) {
+      const isLmStudio = localMod.startsWith('openai/') || localMod.startsWith('lm-studio/');
+      const targetBaseUrl = isLmStudio ? lmStudioBaseUrl : ollamaBaseUrl;
+      const cleanName = localMod.replace('ollama/', '').replace('openai/', '').replace('lm-studio/', '');
+
+      lines.push(`  - model_name: ${cleanName}`);
+      lines.push(`    litellm_params:`);
+      lines.push(`      model: ${localMod}`);
+      lines.push(`      api_base: ${yamlValue(targetBaseUrl)}`);
+      lines.push('');
+    }
+
+    // Router settings for air-gapped mode (only local aliases)
+    lines.push('router_settings:');
+    lines.push('  routing_strategy: "least-busy"');
+    lines.push('  num_retries: 2');
+    lines.push('  retry_after: 1');
+    lines.push('  cooldown_time: 30');
+    lines.push('  allowed_fails: 2');
+
+    if (virtualAliases.length > 1) {
+      lines.push('  fallbacks:');
+      for (let i = 0; i < virtualAliases.length - 1; i++) {
+        const currentAlias = virtualAliases[i];
+        const nextAliases = virtualAliases.slice(i + 1).map((a) => `"${a.alias}"`);
+        if (nextAliases.length > 0) {
+          lines.push(`    - ${currentAlias.alias}: [${nextAliases.join(', ')}]`);
+        }
+      }
+    }
+  } else {
+    // --- HYBRID MODE: Generate model_list entries from fallback chains + virtual aliases ---
+    for (const alias of virtualAliases) {
+      const chain = fallbackChains.find((c) => c.id === alias.targetChainId);
+      if (!chain) continue;
+
+      lines.push(`  # --- ${alias.alias} virtual alias ---`);
+
+      for (const node of chain.nodes) {
+        const provider = providerMap.get(node.provider);
+        if (!provider) continue;
+
+        const prefix = PROVIDER_PREFIX[node.provider] || '';
+        const litellmModel = prefix + node.modelIdentifier;
+        const creds = getCredentialBlock(provider);
+
+        lines.push(`  - model_name: ${alias.alias}`);
+        lines.push(`    litellm_params:`);
+        lines.push(`      model: ${litellmModel}`);
+
+        for (const [key, val] of Object.entries(creds)) {
+          lines.push(`      ${key}: ${yamlValue(val)}`);
+        }
+
+        if (node.timeoutMs) {
+          lines.push(`      timeout: ${Math.round(node.timeoutMs / 1000)}`);
+        }
+
+        lines.push('');
+      }
+    }
+
+    // --- Add standalone model bindings for each enabled provider's models ---
+    lines.push('  # --- Standalone model bindings ---');
+    const standaloneModels: Array<{ name: string; provider: ProviderId; model: string }> = [
+      { name: 'gpt-4o', provider: 'openai', model: 'openai/gpt-4o' },
+      { name: 'gpt-4o-mini', provider: 'openai', model: 'openai/gpt-4o-mini' },
+      { name: 'claude-3-7-sonnet-20250219', provider: 'anthropic', model: 'anthropic/claude-3-7-sonnet-20250219' },
+      { name: 'claude-3-5-sonnet-20241022', provider: 'anthropic', model: 'anthropic/claude-3-5-sonnet-20241022' },
+      { name: 'claude-3-5-haiku-20241022', provider: 'anthropic', model: 'anthropic/claude-3-5-haiku-20241022' },
+    ];
+
+    for (const m of standaloneModels) {
+      const provider = providerMap.get(m.provider);
+      if (!provider) continue;
+
+      const creds = getCredentialBlock(provider);
+      lines.push(`  - model_name: ${m.name}`);
+      lines.push(`    litellm_params:`);
+      lines.push(`      model: ${m.model}`);
       for (const [key, val] of Object.entries(creds)) {
         lines.push(`      ${key}: ${yamlValue(val)}`);
       }
-
-      if (node.timeoutMs) {
-        lines.push(`      timeout: ${Math.round(node.timeoutMs / 1000)}`);
-      }
-
       lines.push('');
     }
-  }
 
-  // --- Add standalone model bindings for each enabled provider's models ---
-  lines.push('  # --- Standalone model bindings ---');
-  const standaloneModels: Array<{ name: string; provider: ProviderId; model: string }> = [
-    { name: 'gpt-4o', provider: 'openai', model: 'openai/gpt-4o' },
-    { name: 'gpt-4o-mini', provider: 'openai', model: 'openai/gpt-4o-mini' },
-    { name: 'claude-3-7-sonnet-20250219', provider: 'anthropic', model: 'anthropic/claude-3-7-sonnet-20250219' },
-    { name: 'claude-3-5-sonnet-20241022', provider: 'anthropic', model: 'anthropic/claude-3-5-sonnet-20241022' },
-    { name: 'claude-3-5-haiku-20241022', provider: 'anthropic', model: 'anthropic/claude-3-5-haiku-20241022' },
-  ];
+    // --- Router settings (fallback chains) ---
+    lines.push('router_settings:');
+    lines.push('  routing_strategy: "least-busy"');
+    lines.push('  num_retries: 2');
+    lines.push('  retry_after: 1');
+    lines.push('  cooldown_time: 30');
+    lines.push('  allowed_fails: 2');
 
-  for (const m of standaloneModels) {
-    const provider = providerMap.get(m.provider);
-    if (!provider) continue;
-
-    const creds = getCredentialBlock(provider);
-    lines.push(`  - model_name: ${m.name}`);
-    lines.push(`    litellm_params:`);
-    lines.push(`      model: ${m.model}`);
-    for (const [key, val] of Object.entries(creds)) {
-      lines.push(`      ${key}: ${yamlValue(val)}`);
-    }
-    lines.push('');
-  }
-
-  // --- Router settings (fallback chains) ---
-  lines.push('router_settings:');
-  lines.push('  routing_strategy: "least-busy"');
-  lines.push('  num_retries: 2');
-  lines.push('  retry_after: 1');
-  lines.push('  cooldown_time: 30');
-  lines.push('  allowed_fails: 2');
-
-  // Build fallbacks from the virtual alias chain ordering
-  if (virtualAliases.length > 0) {
-    lines.push('  fallbacks:');
-    for (const alias of virtualAliases) {
-      // Find other aliases that can serve as fallbacks
-      const otherAliases = virtualAliases
-        .filter((a) => a.alias !== alias.alias)
-        .map((a) => a.alias);
-      
-      const fallbackTargets = [...standaloneModels.map((m) => m.name).slice(0, 1), ...otherAliases];
-      if (fallbackTargets.length > 0) {
-        const fallbackList = fallbackTargets.map((f) => `"${f}"`).join(', ');
-        lines.push(`    - ${alias.alias}: [${fallbackList}]`);
+    if (virtualAliases.length > 0) {
+      lines.push('  fallbacks:');
+      for (const alias of virtualAliases) {
+        const otherAliases = virtualAliases
+          .filter((a) => a.alias !== alias.alias)
+          .map((a) => a.alias);
+        
+        const fallbackTargets = [...standaloneModels.map((m) => m.name).slice(0, 1), ...otherAliases];
+        if (fallbackTargets.length > 0) {
+          const fallbackList = fallbackTargets.map((f) => `"${f}"`).join(', ');
+          lines.push(`    - ${alias.alias}: [${fallbackList}]`);
+        }
       }
     }
   }
@@ -196,8 +252,10 @@ export function generateLiteLLMConfig(input: LiteLLMConfigInput): string {
   lines.push('  drop_params: true');
   lines.push('  set_verbose: false');
   lines.push('  request_timeout: 60');
-  lines.push(`  max_budget: ${budget.dailyLimit.toFixed(1)}`);
-  lines.push('  budget_duration: "1d"');
+  if (budget.dailyLimit !== null) {
+    lines.push(`  max_budget: ${budget.dailyLimit.toFixed(1)}`);
+    lines.push('  budget_duration: "1d"');
+  }
   lines.push('');
 
   // --- General settings ---

@@ -11,24 +11,6 @@ import importlib
 
 os.environ["POLARS_SKIP_CPU_CHECK"] = "1"
 
-# Ensure HTTPS requests from tiktoken/requests during build can complete
-try:
-    ssl._create_default_https_context = ssl._create_unverified_context
-except Exception:
-    pass
-
-try:
-    import requests
-    import urllib3
-    urllib3.disable_warnings()
-    _orig_send = requests.Session.send
-    def _unverified_send(self, request, **kwargs):
-        kwargs['verify'] = False
-        return _orig_send(self, request, **kwargs)
-    requests.Session.send = _unverified_send
-except Exception:
-    pass
-
 block_cipher = None
 
 from PyInstaller.utils.hooks import collect_data_files, copy_metadata, collect_submodules
@@ -90,6 +72,13 @@ try:
     hiddenimports += collect_submodules('litellm')
 except Exception as e:
     print(f"WARNING collecting submodules: {e}")
+
+# setuptools/pkg_resources imports backports.tarfile through a namespace
+# package that PyInstaller 6.12 does not discover reliably on Unix.
+try:
+    hiddenimports += collect_submodules('backports')
+except Exception as e:
+    print(f"WARNING collecting backports namespace: {e}")
 
 # ---------------------------------------------------------------------------
 # Analysis

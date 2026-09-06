@@ -13,6 +13,13 @@ export interface SpanRecord {
   attributes: Record<string, any>;
 }
 
+export interface TraceMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  name?: string;
+  toolCallId?: string;
+}
+
 export interface ActivityTrace {
   id: string;
   traceId: string;
@@ -42,10 +49,13 @@ export interface ActivityTrace {
     temperature?: number;
     stream: boolean;
     samplePrompt?: string;
+    messages?: TraceMessage[];
+    rawPayloadJson?: string;
   };
   responsePayloadSummary?: {
     finishReason?: string;
     sampleResponse?: string;
     toolCallsMade?: string[];
+    rawResponseJson?: string;
   };
 }

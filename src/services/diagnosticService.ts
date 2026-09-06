@@ -9,23 +9,36 @@ export class DiagnosticService {
   public static sanitizeSensitiveData(input: string): string {
     if (!input) return '';
     return input
-      // Redact OpenAI keys
+      // Redact Private Key blocks
+      .replace(/-----BEGIN [A-Z0-9_-]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9_-]+ PRIVATE KEY-----/g, '-----BEGIN PRIVATE KEY-----\n[REDACTED_PRIVATE_KEY_BLOCK]\n-----END PRIVATE KEY-----')
+      // Redact Provider API keys & tokens
+      .replace(/sk-ant-[a-zA-Z0-9_-]{16,}/g, 'sk-ant-***REDACTED***')
+      .replace(/sk-or-[a-zA-Z0-9_-]{16,}/g, 'sk-or-***REDACTED***')
+      .replace(/gsk_[a-zA-Z0-9]{16,}/g, 'gsk_***REDACTED***')
+      .replace(/hf_[a-zA-Z0-9]{16,}/g, 'hf_***REDACTED***')
       .replace(/sk-[a-zA-Z0-9_-]{20,}/g, 'sk-***REDACTED***')
-      // Redact Anthropic keys
-      .replace(/sk-ant-[a-zA-Z0-9_-]{20,}/g, 'sk-ant-***REDACTED***')
-      // Redact GitHub tokens
       .replace(/ghp_[a-zA-Z0-9]{20,}/g, 'ghp_***REDACTED***')
       .replace(/github_pat_[a-zA-Z0-9_]{20,}/g, 'github_pat_***REDACTED***')
-      // Redact AWS keys
       .replace(/AKIA[0-9A-Z]{16}/g, 'AKIA***REDACTED***')
-      // Redact Bearer tokens
+      .replace(/xox[baprs]-[0-9a-zA-Z-]+/g, 'xox-***REDACTED***')
+      .replace(/secret_[a-zA-Z0-9]{16,}/g, 'secret_***REDACTED***')
+      .replace(/lin_api_[a-zA-Z0-9]{16,}/g, 'lin_api_***REDACTED***')
+      .replace(/[sr]k_live_[a-zA-Z0-9]{16,}/g, 'sk_live_***REDACTED***')
+      .replace(/SG\.[a-zA-Z0-9_-]{16,}\.[a-zA-Z0-9_-]{16,}/g, 'SG.***REDACTED***')
+      .replace(/PMAK-[a-zA-Z0-9]{24,}-[a-zA-Z0-9]{32,}/g, 'PMAK-***REDACTED***')
+      // Redact Bearer and Basic authentication headers
       .replace(/Bearer\s+[a-zA-Z0-9._~+/-]{10,}/gi, 'Bearer ***REDACTED***')
-      // Redact URLs with passwords
-      .replace(/(postgresql|postgres|mysql|redis|mongodb):\/\/([^:]+):([^@]+)@/gi, '$1://$2:***REDACTED***@')
-      // Redact Slack tokens
-      .replace(/xoxb-[0-9a-zA-Z-]+/g, 'xoxb-***REDACTED***')
-      // Redact Notion secrets
-      .replace(/secret_[a-zA-Z0-9]{20,}/g, 'secret_***REDACTED***');
+      .replace(/Basic\s+[a-zA-Z0-9+/=]{16,}/gi, 'Basic ***REDACTED***')
+      // Redact Database and protocol connection strings with passwords
+      .replace(/(postgresql|postgres|mysql|mssql|mongodb|mongodb\+srv|redis|rediss|cockroachdb|sqlite|amqp|amqps):\/\/([^:]+):([^@\s]+)@/gi, '$1://$2:***REDACTED***@')
+      // Redact secrets in URL query parameters
+      .replace(/([?&](?:token|key|api_key|apiKey|password|secret|auth|access_token|client_secret|pass|secretKey|aws_secret_access_key)=)[^&\s]+/gi, '$1***REDACTED***')
+      // Redact JSON/YAML key-value credentials
+      .replace(/(["']?(?:apiKey|api_key|token|secret|password|credential|accessKey|secretKey|clientSecret|privateKey)["']?\s*[:=]\s*["'])([^"'\s]{6,})(["'])/gi, '$1***REDACTED***$3')
+      // Mask user local home paths
+      .replace(/([a-zA-Z]:\\Users\\)[^\\/\s]+/g, '$1***USER***')
+      .replace(/(\/Users\/)[^/\s]+/g, '$1***USER***')
+      .replace(/(\/home\/)[^/\s]+/g, '$1***USER***');
   }
 
   /**
@@ -63,7 +76,7 @@ Platform: \`${context.os}\`
 
 #### 1. Proxy Gateway State
 - **Status:** ${context.proxyRunning ? '🟢 Running on `127.0.0.1:' + context.proxyPort + '`' : '🔴 Stopped'}
-- **Daily Spend:** $${context.budget.currentDailySpend.toFixed(3)} / $${context.budget.dailyLimit.toFixed(2)}
+- **Daily Spend:** $${context.budget.currentDailySpend.toFixed(3)} / ${context.budget.dailyLimit !== null ? `$${context.budget.dailyLimit.toFixed(2)}` : 'Unlimited'}
 - **Circuit Breaker Tripped:** ${context.budget.isCircuitBreakerTripped ? '⚠️ YES (Hard cutoff active)' : '🟢 No (Operating normally)'}
 
 #### 2. Provider Health Matrix
