@@ -34,7 +34,7 @@ jobs:
             sidecar_binary: litellm-proxy-aarch64-apple-darwin
             py_sidecar_out: sidecar/dist/litellm-proxy/litellm-proxy
           - name: macOS Intel (x64)
-            os: macos-13
+            os: macos-15-intel
             target: x86_64-apple-darwin
             sidecar_binary: litellm-proxy-x86_64-apple-darwin
             py_sidecar_out: sidecar/dist/litellm-proxy/litellm-proxy
