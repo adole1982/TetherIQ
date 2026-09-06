@@ -878,6 +878,17 @@ impl SignedAdminClient {
         path: &str,
         body: Option<Vec<u8>>,
     ) -> Result<(Vec<u8>, u16), String> {
+        self.execute_signed_request_for_supervisor(supervisor.inner(), method, path, body)
+            .await
+    }
+
+    async fn execute_signed_request_for_supervisor(
+        &self,
+        supervisor: &SidecarSupervisor,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<Vec<u8>>,
+    ) -> Result<(Vec<u8>, u16), String> {
         let (port, secret, generation) = {
             let guard = supervisor.state.lock().unwrap();
             (
@@ -5331,10 +5342,11 @@ pub fn run() {
 mod tests {
     use super::{
         constant_time_eq_hex, sha256_hex, validate_external_url, validate_numeric_loopback_url,
-        BudgetLimitsPayload, DesiredToolState, ExpectedRevision, ToolAssignmentState,
-        ToolCredentialMutation, ToolSyncStatus, TriState,
+        BudgetLimitsPayload, DesiredToolState, ExpectedRevision, SidecarSupervisor,
+        SignedAdminClient, ToolAssignmentState, ToolCredentialMutation, ToolSyncStatus, TriState,
     };
     use std::fmt::Write;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[tauri::command]
     fn ipc_contract_probe(
@@ -5481,6 +5493,52 @@ mod tests {
             "29458c7197d5a3261f09e85b36731be6d946006b80094827c0b93b49326efafc"
         );
         assert!(constant_time_eq_hex(&sig, &sig));
+    }
+
+    #[tokio::test]
+    async fn test_signed_client_rejects_real_oversized_http_response() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("failed to bind loopback test listener");
+        let port = listener.local_addr().unwrap().port();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = vec![0u8; 4096];
+            let _ = socket.read(&mut request).await.unwrap();
+
+            let oversized_body = vec![b'x'; 65_537];
+            let headers = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n",
+                oversized_body.len()
+            );
+            socket.write_all(headers.as_bytes()).await.unwrap();
+            socket.write_all(&oversized_body).await.unwrap();
+            socket.shutdown().await.unwrap();
+        });
+
+        let supervisor = SidecarSupervisor::default();
+        {
+            let mut state = supervisor.state.lock().unwrap();
+            state.bound_port = port;
+            state.handshake_secret = "oversized-response-test-secret".to_string();
+            state.generation = 1;
+        }
+
+        let result = SignedAdminClient::new()
+            .execute_signed_request_for_supervisor(
+                &supervisor,
+                reqwest::Method::GET,
+                "/oversized",
+                None,
+            )
+            .await;
+
+        assert_eq!(
+            result.unwrap_err(),
+            "Response body exceeded 64KB maximum limit. Truncating and failing closed."
+        );
+        server.await.unwrap();
     }
 
     #[test]
