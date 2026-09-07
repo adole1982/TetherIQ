@@ -809,7 +809,16 @@ pub async fn spawn_litellm_sidecar<R: tauri::Runtime>(
         }
     });
 
-    match tokio::time::timeout(std::time::Duration::from_secs(15), ready_rx).await {
+    // The signed Windows LiteLLM bundle can take more than 15 seconds to unpack
+    // and initialize on its first launch. Keep the gateway in the supervised
+    // startup state long enough to receive its authenticated readiness signal.
+    const SIDECAR_READY_TIMEOUT_SECS: u64 = 60;
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(SIDECAR_READY_TIMEOUT_SECS),
+        ready_rx,
+    )
+    .await
+    {
         Ok(Ok(Ok(bound_port))) => {
             {
                 let mut guard = supervisor_state.lock().unwrap();
@@ -850,7 +859,10 @@ pub async fn spawn_litellm_sidecar<R: tauri::Runtime>(
                 guard.job_handle.take()
             };
             let _ = terminate_sidecar_tree(child, Some(pid), failed_job).await;
-            Err("Timed out waiting for [TETHER_READY] from sidecar after 15 seconds".to_string())
+            Err(format!(
+                "Timed out waiting for [TETHER_READY] from sidecar after {} seconds",
+                SIDECAR_READY_TIMEOUT_SECS
+            ))
         }
     }
 }
