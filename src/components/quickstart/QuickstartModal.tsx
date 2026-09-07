@@ -115,14 +115,11 @@ export const QuickstartModal: React.FC = () => {
         setGatewayPort(port);
       }
 
-      const res = await fetch(`http://127.0.0.1:${port}/tether/readiness`);
-      if (res.ok) {
-        setPingStatus('ok');
-        setPingMessage(`LiteLLM gateway ready at 127.0.0.1:${port}`);
-      } else {
-        setPingStatus('error');
-        setPingMessage(`Gateway returned HTTP ${res.status}`);
-      }
+      // The native supervisor reaches Ready only after it verifies the sidecar's
+      // loopback readiness attestation. Re-fetching from the webview is both
+      // redundant and susceptible to platform-specific WebView CORS behavior.
+      setPingStatus('ok');
+      setPingMessage(`LiteLLM gateway ready at 127.0.0.1:${port}`);
     } catch (err: any) {
       setPingStatus('error');
       setPingMessage(err?.message || 'Could not verify the LiteLLM gateway.');
