@@ -36,8 +36,14 @@ export const LiveTelemetryHUD: React.FC = () => {
     toggleAirGappedMode
   } = useTetherStore();
 
+  const safeNumber = (value: unknown): number => Number.isFinite(Number(value)) ? Number(value) : 0;
+  const displayTokensPerSec = safeNumber(currentTokensPerSec);
+  const displayBurnRate = safeNumber(currentBurnRatePerHour);
+  const displayDailySpend = safeNumber(budget.currentDailySpend);
+  const displayDailyLimit = budget.dailyLimit === null ? null : safeNumber(budget.dailyLimit);
+
   const totalTokensToday = telemetryHistory.reduce((acc, t) => acc + t.inputTokens + t.outputTokens, 0);
-  const budgetPercentage = Math.min(100, (budget.dailyLimit ?? 0) > 0 ? (budget.currentDailySpend / (budget.dailyLimit ?? 1)) * 100 : 0);
+  const budgetPercentage = Math.min(100, (displayDailyLimit ?? 0) > 0 ? (displayDailySpend / (displayDailyLimit ?? 1)) * 100 : 0);
 
   return (
     <div className="space-y-6">
@@ -71,7 +77,7 @@ export const LiveTelemetryHUD: React.FC = () => {
           </div>
           <div>
             <div className="flex items-baseline space-x-1.5">
-              <span className="text-2xl font-extrabold text-white font-mono">{currentTokensPerSec.toFixed(1)}</span>
+              <span className="text-2xl font-extrabold text-white font-mono">{displayTokensPerSec.toFixed(1)}</span>
               <span className="text-xs text-cyan-400 font-mono">tokens/s</span>
             </div>
             <div className="flex items-center space-x-1 text-[11px] text-emerald-400 mt-1">
@@ -110,7 +116,7 @@ export const LiveTelemetryHUD: React.FC = () => {
           </div>
           <div>
             <div className="flex items-baseline space-x-1.5">
-              <span className="text-2xl font-extrabold text-amber-400 font-mono">${currentBurnRatePerHour.toFixed(2)}</span>
+              <span className="text-2xl font-extrabold text-amber-400 font-mono">${displayBurnRate.toFixed(2)}</span>
               <span className="text-xs text-slate-400 font-mono">/ hour</span>
             </div>
             <div className="text-[11px] text-slate-500 mt-1">
@@ -135,9 +141,9 @@ export const LiveTelemetryHUD: React.FC = () => {
             <div className="flex items-baseline justify-between">
               <div className="flex items-baseline space-x-1 font-mono">
                 <span className={`text-2xl font-extrabold ${budget.isCircuitBreakerTripped ? 'text-rose-400' : 'text-white'}`}>
-                  ${budget.currentDailySpend.toFixed(2)}
+                  ${displayDailySpend.toFixed(2)}
                 </span>
-                <span className="text-xs text-slate-500">/ {budget.dailyLimit !== null ? `$${budget.dailyLimit.toFixed(2)}` : '∞'}</span>
+                <span className="text-xs text-slate-500">/ {displayDailyLimit !== null ? `$${displayDailyLimit.toFixed(2)}` : '∞'}</span>
               </div>
               <span className="text-xs font-mono font-semibold text-slate-400">{budgetPercentage.toFixed(0)}%</span>
             </div>
