@@ -3,6 +3,7 @@ import { X, Key, ShieldCheck, ExternalLink, Zap, DollarSign, Loader2, CheckCircl
 import { useTetherStore } from '../../store/useTetherStore';
 import { BillingMode } from '../../types/routing';
 import { listCredentialSummaries, setProviderCredential, deleteProviderCredential, CredentialSummary } from '../../services/vaultPersistence';
+import { isTauri } from '@tauri-apps/api/core';
 
 export const KeyManagerModal: React.FC = () => {
   const { isKeyManagerOpen, setKeyManagerOpen, providers, updateProvider } = useTetherStore();
@@ -40,7 +41,7 @@ export const KeyManagerModal: React.FC = () => {
         // Immediately clear local form state for security
         setLocalInputs(prev => ({ ...prev, [providerId]: '' }));
         // Restart sidecar to reload environment
-        if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+        if (typeof window !== 'undefined' && isTauri()) {
           const { invoke } = await import('@tauri-apps/api/core');
           await invoke('restart_litellm_sidecar');
         }
@@ -65,7 +66,7 @@ export const KeyManagerModal: React.FC = () => {
         }
       }));
       setLocalInputs(prev => ({ ...prev, [providerId]: '' }));
-      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      if (typeof window !== 'undefined' && isTauri()) {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('restart_litellm_sidecar');
       }
@@ -93,7 +94,7 @@ export const KeyManagerModal: React.FC = () => {
     }));
 
     try {
-      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      if (typeof window !== 'undefined' && isTauri()) {
         const { invoke } = await import('@tauri-apps/api/core');
         const data = await invoke<any>('validate_provider_key', {
           provider: providerId,

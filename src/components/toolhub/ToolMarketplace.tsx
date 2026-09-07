@@ -21,6 +21,7 @@ import {
 import { useTetherStore } from '../../store/useTetherStore';
 import { McpToolDefinition, ToolCategory } from '../../types/tools';
 import { DynamicCredentialDrawer } from './DynamicCredentialDrawer';
+import { isTauri } from '@tauri-apps/api/core';
 
 export const ToolMarketplace: React.FC = () => {
   const { 
@@ -41,7 +42,7 @@ export const ToolMarketplace: React.FC = () => {
   const [installMessage, setInstallMessage] = useState<string | null>(null);
 
   const checkRuntime = () => {
-    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+    if (typeof window !== 'undefined' && isTauri()) {
       import('@tauri-apps/api/core').then(({ invoke }) => {
         invoke<{ has_npx: boolean; has_node: boolean; node_version?: string }>('check_runtime_environment')
           .then((res) => {
@@ -63,7 +64,7 @@ export const ToolMarketplace: React.FC = () => {
     setInstallMessage('Opening official Node.js download page (https://nodejs.org/en/download)...');
 
     try {
-      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      if (typeof window !== 'undefined' && isTauri()) {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('open_external_url', { url: 'https://nodejs.org/en/download' });
       } else {

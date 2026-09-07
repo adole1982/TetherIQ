@@ -17,6 +17,7 @@ import {
 import { useTetherStore } from '../../store/useTetherStore';
 import { CLIENT_INTEGRATIONS, ClientIntegrationGuide } from '../../data/clientIntegrations';
 import { setProviderCredential } from '../../services/vaultPersistence';
+import { isTauri } from '@tauri-apps/api/core';
 
 export const QuickstartModal: React.FC = () => {
   const { 
@@ -44,7 +45,7 @@ export const QuickstartModal: React.FC = () => {
     if (!isQuickstartOpen) return;
 
     void fetchGatewayHealth();
-    if (typeof window === 'undefined' || !(window as any).__TAURI__) return;
+    if (typeof window === 'undefined' || !isTauri()) return;
 
     void (async () => {
       try {
@@ -60,7 +61,7 @@ export const QuickstartModal: React.FC = () => {
   if (!isQuickstartOpen) return null;
 
   const handleCopy = async (id: string, text: string) => {
-    if (id === 'claude-code' && typeof window !== 'undefined' && (window as any).__TAURI__) {
+    if (id === 'claude-code' && typeof window !== 'undefined' && isTauri()) {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('copy_gateway_environment', { client: 'anthropic' });
     } else {
@@ -84,7 +85,7 @@ export const QuickstartModal: React.FC = () => {
         });
       }
     }
-    if (savedCredential && typeof window !== 'undefined' && (window as any).__TAURI__) {
+    if (savedCredential && typeof window !== 'undefined' && isTauri()) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('restart_litellm_sidecar');
@@ -118,7 +119,7 @@ export const QuickstartModal: React.FC = () => {
     setPingStatus('checking');
     try {
       let port = gatewayPort || proxyPort;
-      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      if (typeof window !== 'undefined' && isTauri()) {
         const { invoke } = await import('@tauri-apps/api/core');
         const diagnostics = await invoke<{ proxy_running: boolean; proxy_port: number }>('get_gateway_diagnostics');
         if (!diagnostics.proxy_running || diagnostics.proxy_port <= 0) {

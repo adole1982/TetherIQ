@@ -12,6 +12,7 @@ import {
   Cpu
 } from 'lucide-react';
 import { useTetherStore } from '../../store/useTetherStore';
+import { isTauri } from '@tauri-apps/api/core';
 
 export const TerminalDrawer: React.FC = () => {
   const { 
@@ -50,7 +51,7 @@ export const TerminalDrawer: React.FC = () => {
     if (!isTerminalOpen) return;
 
     const fetchDiagnostics = async () => {
-      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      if (typeof window !== 'undefined' && isTauri()) {
         try {
           const { invoke } = await import('@tauri-apps/api/core');
           const data = await invoke<any>('get_gateway_diagnostics');
@@ -71,7 +72,7 @@ export const TerminalDrawer: React.FC = () => {
   if (!isTerminalOpen) return null;
 
   const handleCopy = async (client: 'anthropic' | 'openai') => {
-    if (typeof window === 'undefined' || !(window as any).__TAURI__) return;
+    if (typeof window === 'undefined' || !isTauri()) return;
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('copy_gateway_environment', { client });
     setCopiedKey(client);

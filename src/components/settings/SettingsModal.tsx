@@ -12,6 +12,7 @@ import {
   Info
 } from 'lucide-react';
 import { useTetherStore } from '../../store/useTetherStore';
+import { isTauri } from '@tauri-apps/api/core';
 
 export const SettingsModal: React.FC = () => {
   const { 
@@ -58,7 +59,7 @@ export const SettingsModal: React.FC = () => {
 
   const handleToggleAutoStart = async (checked: boolean) => {
     updateSettings({ autoStartOnBoot: checked });
-    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+    if (typeof window !== 'undefined' && isTauri()) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('set_auto_start_on_boot', { enabled: checked });
@@ -69,7 +70,7 @@ export const SettingsModal: React.FC = () => {
   };
 
   const handleOpenOsStartupSettings = async () => {
-    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+    if (typeof window !== 'undefined' && isTauri()) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('open_os_startup_settings');

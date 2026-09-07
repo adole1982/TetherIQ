@@ -13,6 +13,9 @@
  */
 
 import { SpendBudget } from '../types/telemetry';
+import { isTauri } from '@tauri-apps/api/core';
+
+const isNativeRuntime = () => typeof window !== 'undefined' && isTauri();
 
 // ---------------------------------------------------------------------------
 // Microdollars Parsing & Conversions (Exact String to Integer Microdollars)
@@ -82,7 +85,7 @@ let resolvedBudgetPath: string | null = null;
 async function getBudgetFilePath(): Promise<string> {
   if (resolvedBudgetPath) return resolvedBudgetPath;
 
-  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+  if (isNativeRuntime()) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const paths = await invoke<{ app_data_dir: string }>('get_system_paths');
@@ -102,10 +105,10 @@ async function getBudgetFilePath(): Promise<string> {
 // ---------------------------------------------------------------------------
 
 export async function loadPersistedBudget(): Promise<PersistedBudget> {
-  const isTauri = typeof window !== 'undefined' && (window as any).__TAURI__;
+  const runningInTauri = isNativeRuntime();
 
   // Browser dev mode: use localStorage
-  if (!isTauri) {
+  if (!runningInTauri) {
     if (typeof localStorage !== 'undefined') {
       const stored = localStorage.getItem('tethermesh_budget');
       if (stored) {
@@ -130,14 +133,14 @@ export async function loadPersistedBudget(): Promise<PersistedBudget> {
 }
 
 export async function savePersistedBudget(budget: PersistedBudget): Promise<void> {
-  const isTauri = typeof window !== 'undefined' && (window as any).__TAURI__;
+  const runningInTauri = isNativeRuntime();
   const data: PersistedBudget = {
     ...budget,
     lastUpdatedAt: Date.now(),
   };
 
   // Browser dev mode: use localStorage
-  if (!isTauri) {
+  if (!runningInTauri) {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem('tethermesh_budget', JSON.stringify(data));
     }
@@ -232,7 +235,7 @@ export async function fetchLiteLLMSpend(proxyUrl?: string): Promise<{
   latestEntries: LiteLLMSpendLogEntry[];
 }> {
   try {
-    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+    if (isNativeRuntime()) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         const summary = await invoke<any>('get_spend_summary');
@@ -288,4 +291,3 @@ export async function fetchLiteLLMSpend(proxyUrl?: string): Promise<{
     };
   }
 }
-

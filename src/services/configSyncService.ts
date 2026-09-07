@@ -3,6 +3,7 @@ import { ClientSyncResult } from '../types/config';
 import { TARGET_CLIENTS_META } from '../data/mcpCatalogData';
 import * as jsonc from 'jsonc-parser';
 import * as toml from 'smol-toml';
+import { isTauri } from '@tauri-apps/api/core';
 
 export type ExpectedRevision =
   | { kind: 'missing' }
@@ -739,7 +740,7 @@ export class ConfigSyncService {
     const path = isTargetId ? filePath : targetOrPath;
 
     // 1. Tauri environment with strongly-typed ConfigTarget and ExpectedRevision
-    if (typeof window !== 'undefined' && (window as any).__TAURI__ && target) {
+    if (typeof window !== 'undefined' && isTauri() && target) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         const res = await invoke<{ exists: boolean; revision: ExpectedRevision; configured_tool_ids: string[]; schema_valid: boolean }>('read_client_config', { target });
@@ -794,7 +795,7 @@ export class ConfigSyncService {
     toolResults?: import('../types/tools').StructuredToolResult[];
   }> {
     try {
-      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      if (typeof window !== 'undefined' && isTauri()) {
         const { invoke } = await import('@tauri-apps/api/core');
         const res = await invoke<{
           success: boolean;
@@ -843,7 +844,7 @@ export class ConfigSyncService {
       const path = isTargetId ? filePath : targetOrPath;
 
       // 1. Tauri mode (real native app with strongly-typed ConfigTarget)
-      if (typeof window !== 'undefined' && (window as any).__TAURI__ && target) {
+      if (typeof window !== 'undefined' && isTauri() && target) {
         // In Tauri mode, client synchronizations must go through syncClientConfigSafely
         return { success: true };
       }
@@ -1152,7 +1153,7 @@ export class ConfigSyncService {
         }
 
         if (options.writeToDisk !== false) {
-          if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+          if (typeof window !== 'undefined' && isTauri()) {
             lastWriteResult = await ConfigSyncService.syncClientConfigSafely(
               meta.id,
               nativeTools,

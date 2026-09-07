@@ -6,6 +6,7 @@
  */
 
 import { FallbackChain, VirtualModelAlias } from '../types/routing';
+import { isTauri } from '@tauri-apps/api/core';
 
 export interface CredentialSummary {
   provider: string;
@@ -34,6 +35,10 @@ const memoryCredentialSummaries: Map<string, CredentialSummary> = new Map();
 const memoryToolCredentialSummaries: Map<string, ToolCredentialSummary> = new Map();
 const memoryToolSecrets: Map<string, Map<string, string>> = new Map();
 let memoryRoutingMetadata: RoutingMetadata | null = null;
+
+function isNativeRuntime(): boolean {
+  return typeof window !== 'undefined' && isTauri();
+}
 
 // Allowlisted non-sensitive Web Storage keys that must be preserved
 const ALLOWLISTED_STORAGE_KEYS = new Set([
@@ -108,7 +113,7 @@ export function purgeLegacyLocalStorageSecrets(): void {
  * Returns only metadata and masked hints, never plaintext secrets.
  */
 export async function listToolCredentialSummaries(): Promise<ToolCredentialSummary[]> {
-  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+  if (isNativeRuntime()) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       return await invoke<ToolCredentialSummary[]>('list_tool_credential_summaries');
@@ -126,7 +131,7 @@ export async function listToolCredentialSummaries(): Promise<ToolCredentialSumma
  * Load tool assignments (enabled state and target clients) from native storage.
  */
 export async function loadNativeToolAssignments(): Promise<import('../types/tools').ToolAssignmentState[]> {
-  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+  if (isNativeRuntime()) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       return await invoke<import('../types/tools').ToolAssignmentState[]>('get_tool_assignments');
@@ -145,7 +150,7 @@ export async function loadNativeToolAssignments(): Promise<import('../types/tool
 export async function saveNativeToolAssignments(
   assignments: import('../types/tools').ToolAssignmentState[]
 ): Promise<boolean> {
-  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+  if (isNativeRuntime()) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       return await invoke<boolean>('save_tool_assignments', { assignments });
@@ -165,7 +170,7 @@ export async function mutateToolCredentials(
   toolId: string,
   mutations: import('../types/tools').CredentialFieldMutation[]
 ): Promise<ToolCredentialSummary> {
-  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+  if (isNativeRuntime()) {
     const { invoke } = await import('@tauri-apps/api/core');
     return await invoke<ToolCredentialSummary>('mutate_tool_credentials', {
       toolId,
@@ -209,7 +214,7 @@ export async function mutateToolCredentials(
  * Revoke a tool completely: prunes all client config files first, then purges keyring credentials.
  */
 export async function revokeTool(toolId: string): Promise<import('../types/tools').RevocationResult> {
-  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+  if (isNativeRuntime()) {
     const { invoke } = await import('@tauri-apps/api/core');
     return await invoke<import('../types/tools').RevocationResult>('revoke_tool', { toolId });
   }
@@ -230,7 +235,7 @@ export async function revokeTool(toolId: string): Promise<import('../types/tools
  * Returns only metadata and masked hints (e.g. "••••a7K2"), never plaintext keys.
  */
 export async function listCredentialSummaries(): Promise<CredentialSummary[]> {
-  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+  if (isNativeRuntime()) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       return await invoke<CredentialSummary[]>('list_credential_summaries');
@@ -252,7 +257,7 @@ export async function setProviderCredential(provider: string, credential: string
   const trimmed = credential.trim();
   if (!trimmed) return null;
 
-  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+  if (isNativeRuntime()) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       return await invoke<CredentialSummary>('set_provider_credential', {
@@ -280,7 +285,7 @@ export async function setProviderCredential(provider: string, credential: string
  * Delete a provider API key from the native OS Credential Vault.
  */
 export async function deleteProviderCredential(provider: string): Promise<boolean> {
-  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+  if (isNativeRuntime()) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       return await invoke<boolean>('delete_provider_credential', { provider });
@@ -299,7 +304,7 @@ export async function deleteProviderCredential(provider: string): Promise<boolea
  * Load non-secret routing configuration (fallback chains, virtual aliases).
  */
 export async function loadRoutingMetadata(): Promise<RoutingMetadata | null> {
-  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+  if (isNativeRuntime()) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       return await invoke<RoutingMetadata | null>('get_routing_metadata');
@@ -326,7 +331,7 @@ export async function saveRoutingMetadata(data: {
     last_saved_at: Date.now()
   };
 
-  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+  if (isNativeRuntime()) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       return await invoke<boolean>('save_routing_metadata', { metadata: payload });

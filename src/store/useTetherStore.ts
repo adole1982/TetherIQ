@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { isTauri } from '@tauri-apps/api/core';
 import { TelemetryPoint, SpendBudget, ConnectedAgent } from '../types/telemetry';
 import { ProviderConfig, FallbackChain, VirtualModelAlias, LocalMeshStatus } from '../types/routing';
 import { McpToolDefinition, InstalledToolState, TargetClientId } from '../types/tools';
@@ -27,6 +28,8 @@ import {
   loadNativeToolAssignments,
   saveNativeToolAssignments,
 } from '../services/vaultPersistence';
+
+const isNativeRuntime = () => typeof window !== 'undefined' && isTauri();
 
 export type NavTab = 'hud' | 'matrix' | 'tools' | 'traces' | 'agents' | 'quickstart' | 'settings';
 
@@ -362,7 +365,7 @@ export const useTetherStore = create<TetherState>((set, get) => ({
 
   fetchGatewayHealth: async () => {
     // Populate the authoritative native MCP catalog without exposing gateway credentials.
-    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+    if (isNativeRuntime()) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         const nativeCatalog = await invoke<any[]>('get_mcp_catalog');
@@ -422,11 +425,11 @@ export const useTetherStore = create<TetherState>((set, get) => ({
     }
 
     try {
-      const isTauri = typeof window !== 'undefined' && (window as any).__TAURI__;
+      const runningInTauri = isNativeRuntime();
       let isRunning = true;
       let proxyPort = 4000;
 
-      if (isTauri) {
+      if (runningInTauri) {
         try {
           const { invoke } = await import('@tauri-apps/api/core');
           const status = await invoke<{ is_running: boolean; port: number }>('get_proxy_status');
@@ -473,7 +476,7 @@ export const useTetherStore = create<TetherState>((set, get) => ({
 
       // 7. Probe real provider health and latency
       try {
-        if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+        if (isNativeRuntime()) {
           const { invoke } = await import('@tauri-apps/api/core');
           const provData = await invoke<any>('get_provider_health');
           if (provData && provData.providers) {
@@ -517,7 +520,7 @@ export const useTetherStore = create<TetherState>((set, get) => ({
     const dailyMicros = parseDecimalToMicroUsd(daily);
     const monthlyMicros = parseDecimalToMicroUsd(monthly);
 
-    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+    if (isNativeRuntime()) {
       const { invoke } = await import('@tauri-apps/api/core');
       const response = await invoke<any>('update_budget_limits', {
         limits: {
@@ -576,7 +579,7 @@ export const useTetherStore = create<TetherState>((set, get) => ({
     }
   },
   resetCircuitBreaker: async () => {
-    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+    if (isNativeRuntime()) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         const resp = await invoke<any>('reset_spend_data');
@@ -699,7 +702,7 @@ export const useTetherStore = create<TetherState>((set, get) => ({
       discoveredLocalModels: discoveredModels,
     });
 
-    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+    if (isNativeRuntime()) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('apply_air_gapped_mode', {
@@ -718,7 +721,7 @@ export const useTetherStore = create<TetherState>((set, get) => ({
   },
   scanLocalMesh: async () => {
     try {
-      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      if (isNativeRuntime()) {
         const { invoke } = await import('@tauri-apps/api/core');
         const data = await invoke<any>('get_local_mesh_status');
         if (data) {
