@@ -143,7 +143,7 @@ export const QuickstartModal: React.FC = () => {
   const gatewayBaseUrl = `http://127.0.0.1:${configuredPort}`;
   const snippetFor = (client: ClientIntegrationGuide) => {
     if (client.id === 'claude-code') {
-      return `Click Copy Snippet, paste it into a new terminal, then run:\nclaude\n\nThe copied values connect this terminal session to ${gatewayBaseUrl}.`;
+      return `Click Copy Connection Command. It copies the secure PowerShell connection settings; it does not run them automatically.\n\nOpen PowerShell, paste, and press Enter. Then run:\nclaude\n\nThe copied settings connect this terminal session to ${gatewayBaseUrl}.`;
     }
     return client.commandSnippet.replaceAll('http://127.0.0.1:4000', gatewayBaseUrl);
   };
@@ -370,7 +370,7 @@ export const QuickstartModal: React.FC = () => {
                         ) : (
                           <>
                             <Copy className="w-3 h-3" />
-                            <span>Copy Snippet</span>
+                            <span>{client.id === 'claude-code' ? 'Copy Connection Command' : 'Copy Snippet'}</span>
                           </>
                         )}
                       </button>
