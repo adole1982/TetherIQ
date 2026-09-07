@@ -540,6 +540,8 @@ pub fn build_child_environment(
             ("anthropic", "ANTHROPIC_API_KEY"),
             ("azure", "AZURE_API_KEY"),
             ("gemini", "GEMINI_API_KEY"),
+            // Bedrock API keys use LiteLLM's bearer-token environment variable.
+            ("bedrock", "AWS_BEARER_TOKEN_BEDROCK"),
             ("aws", "AWS_SECRET_ACCESS_KEY"),
             ("openrouter", "OPENROUTER_API_KEY"),
             ("mistral", "MISTRAL_API_KEY"),
@@ -5041,6 +5043,7 @@ fn list_credential_summaries() -> Result<Vec<CredentialSummary>, String> {
         "anthropic",
         "azure",
         "gemini",
+        "bedrock",
         "aws",
         "openrouter",
         "mistral",
@@ -5078,11 +5081,12 @@ fn set_provider_credential(
     provider: String,
     credential: String,
 ) -> Result<CredentialSummary, String> {
-    const PROVIDERS: [&str; 10] = [
+    const PROVIDERS: [&str; 11] = [
         "openai",
         "anthropic",
         "azure",
         "gemini",
+        "bedrock",
         "aws",
         "openrouter",
         "mistral",

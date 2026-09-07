@@ -972,6 +972,16 @@ function testAirGappedLocalMeshConfig() {
   assert(hybridYaml.includes('anthropic/claude-3-7-sonnet-20250219'), 'Hybrid mode includes Anthropic models');
   assert(hybridYaml.includes('HYBRID CLOUD & LOCAL'), 'Hybrid mode header emitted');
 
+  const bedrockYaml = generateLiteLLMConfig({
+    providers: [{ id: 'bedrock', name: 'AWS Bedrock', isEnabled: true, awsRegion: 'us-east-1' } as any],
+    fallbackChains: [{ id: 'bedrock-chain', name: 'Bedrock', description: '', nodes: [{ id: 'bedrock-node', provider: 'bedrock', modelIdentifier: 'amazon.nova-pro-v1:0', priority: 1 }] } as any],
+    virtualAliases: [{ alias: 'bedrock-model', targetChainId: 'bedrock-chain', description: '' } as any],
+    budget: mockBudget,
+    isAirGappedMode: false,
+  });
+  assert(bedrockYaml.includes('api_key: os.environ/AWS_BEARER_TOKEN_BEDROCK'), 'Bedrock API key uses LiteLLM bearer-token configuration');
+  assert(!bedrockYaml.includes('aws_access_key_id'), 'Bedrock API key configuration does not require IAM access keys');
+
   // 2. Air-Gapped offline mode config test
   const airGappedYaml = generateLiteLLMConfig({
     providers: mockProviders,

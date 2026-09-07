@@ -2870,7 +2870,7 @@ async def get_provider_health():
         "anthropic": {"url": "https://api.anthropic.com", "method": "HEAD", "key_env": "ANTHROPIC_API_KEY"},
         "openai": {"url": "https://api.openai.com/v1/models", "method": "HEAD", "key_env": "OPENAI_API_KEY"},
         "groq": {"url": "https://api.groq.com/openai/v1/models", "method": "HEAD", "key_env": "GROQ_API_KEY"},
-        "bedrock": {"url": "https://bedrock-runtime.us-east-1.amazonaws.com", "method": "HEAD", "key_env": "AWS_ACCESS_KEY_ID"},
+        "bedrock": {"url": "https://bedrock-runtime.us-east-1.amazonaws.com", "method": "HEAD", "key_env": "AWS_BEARER_TOKEN_BEDROCK"},
         "ollama": {"url": os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434"), "method": "GET", "key_env": None}
     }
 

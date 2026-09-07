@@ -70,11 +70,13 @@ export const QuickstartModal: React.FC = () => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleSaveInputKeys = async () => {
+  const handleSaveInputKeys = async (): Promise<boolean> => {
+    let savedCredential = false;
     for (const [provId, rawKey] of Object.entries(inputKeys)) {
       const trimmed = rawKey.trim();
       if (trimmed) {
         const summary = await setProviderCredential(provId, trimmed);
+        savedCredential = true;
         updateProvider(provId as any, {
           isEnabled: true,
           isConfigured: true,
@@ -82,8 +84,19 @@ export const QuickstartModal: React.FC = () => {
         });
       }
     }
+    if (savedCredential && typeof window !== 'undefined' && (window as any).__TAURI__) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('restart_litellm_sidecar');
+      } catch (err: any) {
+        setPingStatus('error');
+        setPingMessage(err?.message || 'Credential saved, but the LiteLLM gateway could not restart. Close and reopen TetherMesh before using it.');
+        return false;
+      }
+    }
     // Immediately scrub transient key memory
     setInputKeys({});
+    return true;
   };
 
   const handleAutoConfigureAll = async () => {
@@ -136,7 +149,7 @@ export const QuickstartModal: React.FC = () => {
   };
 
   const handleCompleteWizard = async () => {
-    await handleSaveInputKeys();
+    if (!(await handleSaveInputKeys())) return;
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem('tethermesh_onboarded', 'true');
     }
@@ -233,7 +246,7 @@ export const QuickstartModal: React.FC = () => {
                     <div className="w-1/3">
                       <div className="text-xs font-semibold text-white flex items-center space-x-1.5">
                         <Key className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>{p.name}</span>
+                        <span>{p.id === 'bedrock' ? 'Amazon Bedrock API Key' : p.name}</span>
                       </div>
                       <div className="text-[11px] text-slate-500">
                         {p.id === 'ollama' ? 'Local engine auto-detect' : p.isConfigured ? `OS Vault (${p.keyHint || '••••'})` : 'Cloud inference'}
@@ -251,7 +264,7 @@ export const QuickstartModal: React.FC = () => {
                       ) : (
                         <input
                           type="password"
-                          placeholder={p.isConfigured ? `Configured in OS Vault (${p.keyHint || '••••'})` : `Enter ${p.name} key...`}
+                          placeholder={p.isConfigured ? `Configured in OS Vault (${p.keyHint || '••••'})` : p.id === 'bedrock' ? 'Enter Amazon Bedrock API key...' : `Enter ${p.name} key...`}
                           value={inputKeys[p.id] || ''}
                           onChange={(e) => setInputKeys(prev => ({ ...prev, [p.id]: e.target.value }))}
                           className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
@@ -389,7 +402,7 @@ export const QuickstartModal: React.FC = () => {
             <button
               onClick={async () => {
                 if (currentStep === 1) {
-                  await handleSaveInputKeys();
+                  if (!(await handleSaveInputKeys())) return;
                 }
                 setCurrentStep((prev) => Math.min(3, prev + 1) as any);
               }}

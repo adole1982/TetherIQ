@@ -39,8 +39,7 @@ function getCredentialBlock(provider: ProviderConfig): ProviderCredentialBlock {
       return { api_key: 'os.environ/OPENAI_API_KEY' };
     case 'bedrock':
       return {
-        aws_access_key_id: 'os.environ/AWS_ACCESS_KEY_ID',
-        aws_secret_access_key: 'os.environ/AWS_SECRET_ACCESS_KEY',
+        api_key: 'os.environ/AWS_BEARER_TOKEN_BEDROCK',
         aws_region_name: provider.awsRegion || 'us-east-1',
       };
     case 'vertex':
