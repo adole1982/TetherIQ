@@ -326,6 +326,40 @@ pub fn resolve_config_path<R: tauri::Runtime>(app: &AppHandle<R>) -> PathBuf {
     app_dir.join("litellm_config.yaml")
 }
 
+const DEFAULT_LITELLM_CONFIG: &str =
+    "# TetherMesh initializes provider routes after setup.\nmodel_list: []\n";
+
+fn ensure_litellm_config_exists(config_path: &Path) -> Result<(), String> {
+    if config_path.exists() {
+        return Ok(());
+    }
+
+    let parent = config_path
+        .parent()
+        .ok_or_else(|| "LiteLLM configuration path has no parent directory".to_string())?;
+    fs::create_dir_all(parent)
+        .map_err(|e| format!("Failed to create LiteLLM configuration directory: {}", e))?;
+
+    let temp_path = config_path.with_extension(format!("yaml.{}.tmp", generate_os_random_hex(6)?));
+    fs::write(&temp_path, DEFAULT_LITELLM_CONFIG)
+        .map_err(|e| format!("Failed to create default LiteLLM configuration: {}", e))?;
+
+    match fs::rename(&temp_path, config_path) {
+        Ok(()) => Ok(()),
+        Err(_error) if config_path.exists() => {
+            let _ = fs::remove_file(&temp_path);
+            Ok(())
+        }
+        Err(error) => {
+            let _ = fs::remove_file(&temp_path);
+            Err(format!(
+                "Failed to install default LiteLLM configuration: {}",
+                error
+            ))
+        }
+    }
+}
+
 pub fn load_persisted_air_gapped_state(app_data_dir: &Path) -> bool {
     let state_file = app_data_dir.join("air_gapped.state");
     if let Ok(content) = fs::read_to_string(&state_file) {
@@ -581,6 +615,7 @@ pub async fn spawn_litellm_sidecar<R: tauri::Runtime>(
     };
 
     let config_path = resolve_config_path(&app);
+    ensure_litellm_config_exists(&config_path)?;
     let config_str = config_path.to_string_lossy().to_string();
     let config_bytes = fs::read(&config_path).map_err(|e| {
         format!(
@@ -5521,6 +5556,28 @@ mod tests {
         assert!(validate_numeric_loopback_url("http://localhost:11434").is_err());
         assert!(validate_numeric_loopback_url("https://127.0.0.1:11434").is_err());
         assert!(validate_numeric_loopback_url("http://192.168.1.100:11434").is_err());
+    }
+
+    #[test]
+    fn test_missing_litellm_config_is_initialized_without_overwriting_existing_config() {
+        let path = std::env::temp_dir().join(format!(
+            "tethermesh-default-config-{}.yaml",
+            super::generate_os_random_hex(8).unwrap()
+        ));
+
+        super::ensure_litellm_config_exists(&path).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            super::DEFAULT_LITELLM_CONFIG
+        );
+
+        std::fs::write(&path, "model_list:\n  - model_name: preserved\n").unwrap();
+        super::ensure_litellm_config_exists(&path).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "model_list:\n  - model_name: preserved\n"
+        );
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]
