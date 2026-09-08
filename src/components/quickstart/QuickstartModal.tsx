@@ -47,15 +47,42 @@ export const QuickstartModal: React.FC = () => {
     void fetchGatewayHealth();
     if (typeof window === 'undefined' || !isTauri()) return;
 
-    void (async () => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let attempts = 0;
+
+    const waitForGateway = async () => {
+      if (cancelled) return;
+
+      setPingStatus('checking');
+      setPingMessage('Starting the secure local LiteLLM gateway…');
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        const diagnostics = await invoke<{ proxy_port: number }>('get_gateway_diagnostics');
-        if (diagnostics.proxy_port > 0) setGatewayPort(diagnostics.proxy_port);
+        const diagnostics = await invoke<{ proxy_running: boolean; proxy_port: number }>('get_gateway_diagnostics');
+        if (diagnostics.proxy_running && diagnostics.proxy_port > 0) {
+          setGatewayPort(diagnostics.proxy_port);
+          setPingStatus('ok');
+          setPingMessage(`LiteLLM gateway ready at 127.0.0.1:${diagnostics.proxy_port}`);
+          return;
+        }
       } catch {
-        setGatewayPort(null);
+        // Keep waiting while the supervised native sidecar is starting.
       }
-    })();
+
+      attempts += 1;
+      if (attempts >= 90) {
+        setPingStatus('error');
+        setPingMessage('The LiteLLM gateway did not become ready. Retry Gateway to check again.');
+        return;
+      }
+      timer = setTimeout(waitForGateway, 2000);
+    };
+
+    void waitForGateway();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [fetchGatewayHealth, isQuickstartOpen]);
 
   if (!isQuickstartOpen) return null;
@@ -211,10 +238,15 @@ export const QuickstartModal: React.FC = () => {
 
           <button
             onClick={handleTestConnection}
-            className="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-slate-800/80 hover:bg-slate-800 text-[11px] text-slate-300 transition-colors border border-slate-700/60"
+            disabled={pingStatus === 'checking'}
+            className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-[11px] transition-colors border ${
+              pingStatus === 'checking'
+                ? 'bg-slate-800/40 text-slate-500 border-slate-800 cursor-wait'
+                : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border-slate-700/60'
+            }`}
           >
-            <Activity className={`w-3.5 h-3.5 ${pingStatus === 'ok' ? 'text-emerald-400' : pingStatus === 'error' ? 'text-rose-400' : 'text-cyan-400'}`} />
-            <span>Test Gateway</span>
+            <Activity className={`w-3.5 h-3.5 ${pingStatus === 'checking' ? 'animate-spin text-cyan-400' : pingStatus === 'ok' ? 'text-emerald-400' : pingStatus === 'error' ? 'text-rose-400' : 'text-cyan-400'}`} />
+            <span>{pingStatus === 'checking' ? 'Starting Gateway' : 'Test Gateway'}</span>
           </button>
         </div>
 
@@ -403,11 +435,17 @@ export const QuickstartModal: React.FC = () => {
             <button
               onClick={async () => {
                 if (currentStep === 1) {
+                  if (pingStatus !== 'ok') return;
                   if (!(await handleSaveInputKeys())) return;
                 }
                 setCurrentStep((prev) => Math.min(3, prev + 1) as any);
               }}
-              className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-colors shadow-sm shadow-cyan-500/20"
+              disabled={currentStep === 1 && pingStatus !== 'ok'}
+              className={`flex items-center space-x-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors shadow-sm ${
+                currentStep === 1 && pingStatus !== 'ok'
+                  ? 'bg-slate-700 text-slate-400 cursor-not-allowed shadow-none'
+                  : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-cyan-500/20'
+              }`}
             >
               <span>Continue</span>
               <ArrowRight className="w-3.5 h-3.5" />
