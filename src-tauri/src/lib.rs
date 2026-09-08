@@ -844,10 +844,10 @@ pub async fn spawn_litellm_sidecar<R: tauri::Runtime>(
         }
     });
 
-    // The signed Windows LiteLLM bundle can take more than 15 seconds to unpack
-    // and initialize on its first launch. Keep the gateway in the supervised
-    // startup state long enough to receive its authenticated readiness signal.
-    const SIDECAR_READY_TIMEOUT_SECS: u64 = 60;
+    // The signed Windows LiteLLM bundle can take longer than a minute to unpack
+    // and initialize on a cold start. Keep the gateway in the supervised startup
+    // state long enough to receive its authenticated readiness signal.
+    const SIDECAR_READY_TIMEOUT_SECS: u64 = 180;
     match tokio::time::timeout(
         std::time::Duration::from_secs(SIDECAR_READY_TIMEOUT_SECS),
         ready_rx,
