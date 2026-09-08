@@ -40,6 +40,7 @@ export const QuickstartModal: React.FC = () => {
   const [pingStatus, setPingStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle');
   const [pingMessage, setPingMessage] = useState<string>('');
   const [gatewayPort, setGatewayPort] = useState<number | null>(null);
+  const [isRestarting, setIsRestarting] = useState(false);
 
   useEffect(() => {
     if (!isQuickstartOpen) return;
@@ -113,13 +114,26 @@ export const QuickstartModal: React.FC = () => {
       }
     }
     if (savedCredential && typeof window !== 'undefined' && isTauri()) {
+      setIsRestarting(true);
+      setPingStatus('checking');
+      setPingMessage('Applying credential and restarting the secure LiteLLM gateway…');
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('restart_litellm_sidecar');
-      } catch (err: any) {
+        const restart = await invoke<{ port: number }>('restart_litellm_sidecar');
+        if (restart.port > 0) setGatewayPort(restart.port);
+        setPingStatus('ok');
+        setPingMessage(`LiteLLM gateway ready at 127.0.0.1:${restart.port}`);
+      } catch (err: unknown) {
+        const detail = typeof err === 'string'
+          ? err
+          : err instanceof Error
+            ? err.message
+            : JSON.stringify(err);
         setPingStatus('error');
-        setPingMessage(err?.message || 'Credential saved, but the LiteLLM gateway could not restart. Close and reopen TetherMesh before using it.');
+        setPingMessage(`Credential was saved, but the LiteLLM gateway restart failed: ${detail}`);
         return false;
+      } finally {
+        setIsRestarting(false);
       }
     }
     // Immediately scrub transient key memory
@@ -238,9 +252,9 @@ export const QuickstartModal: React.FC = () => {
 
           <button
             onClick={handleTestConnection}
-            disabled={pingStatus === 'checking'}
+            disabled={pingStatus === 'checking' || isRestarting}
             className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-[11px] transition-colors border ${
-              pingStatus === 'checking'
+              pingStatus === 'checking' || isRestarting
                 ? 'bg-slate-800/40 text-slate-500 border-slate-800 cursor-wait'
                 : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border-slate-700/60'
             }`}
@@ -435,14 +449,14 @@ export const QuickstartModal: React.FC = () => {
             <button
               onClick={async () => {
                 if (currentStep === 1) {
-                  if (pingStatus !== 'ok') return;
+                  if (pingStatus !== 'ok' || isRestarting) return;
                   if (!(await handleSaveInputKeys())) return;
                 }
                 setCurrentStep((prev) => Math.min(3, prev + 1) as any);
               }}
-              disabled={currentStep === 1 && pingStatus !== 'ok'}
+              disabled={currentStep === 1 && (pingStatus !== 'ok' || isRestarting)}
               className={`flex items-center space-x-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors shadow-sm ${
-                currentStep === 1 && pingStatus !== 'ok'
+                currentStep === 1 && (pingStatus !== 'ok' || isRestarting)
                   ? 'bg-slate-700 text-slate-400 cursor-not-allowed shadow-none'
                   : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-cyan-500/20'
               }`}

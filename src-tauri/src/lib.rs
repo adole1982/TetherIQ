@@ -467,9 +467,13 @@ pub async fn terminate_sidecar_tree(
             .args(["/F", "/T", "/PID", &p.to_string()])
             .output();
     }
+    // LiteLLM can still be unwinding worker threads after taskkill has been
+    // requested. Give Windows enough time to release the supervised process
+    // before treating the controlled restart as failed.
+    let shutdown_timeout = std::time::Duration::from_secs(30);
     let start = std::time::Instant::now();
     let mut exited = pid.is_none();
-    while start.elapsed().as_millis() < 3000 {
+    while start.elapsed() < shutdown_timeout {
         if let Some(p) = pid {
             #[cfg(target_os = "windows")]
             {
@@ -505,8 +509,9 @@ pub async fn terminate_sidecar_tree(
         Ok(())
     } else {
         Err(format!(
-            "Sidecar process {} did not terminate within 3 seconds",
-            pid.unwrap_or_default()
+            "Sidecar process {} did not terminate within {} seconds",
+            pid.unwrap_or_default(),
+            shutdown_timeout.as_secs()
         ))
     }
 }
