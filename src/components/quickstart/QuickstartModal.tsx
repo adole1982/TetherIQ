@@ -17,6 +17,7 @@ import {
 import { useTetherStore } from '../../store/useTetherStore';
 import { CLIENT_INTEGRATIONS, ClientIntegrationGuide } from '../../data/clientIntegrations';
 import { setProviderCredential } from '../../services/vaultPersistence';
+import { generateLiteLLMConfig } from '../../services/litellmConfigService';
 import { isTauri } from '@tauri-apps/api/core';
 
 export const QuickstartModal: React.FC = () => {
@@ -24,6 +25,9 @@ export const QuickstartModal: React.FC = () => {
     isQuickstartOpen, 
     setQuickstartOpen, 
     providers, 
+    fallbackChains,
+    virtualAliases,
+    isAirGappedMode,
     updateProvider, 
     budget, 
     updateBudgetLimits,
@@ -114,11 +118,35 @@ export const QuickstartModal: React.FC = () => {
       }
     }
     if (savedCredential && typeof window !== 'undefined' && isTauri()) {
+      const configuredProviderIds = new Set(
+        providers
+          .filter(provider => provider.isConfigured)
+          .map(provider => provider.id),
+      );
+      for (const providerId of Object.keys(inputKeys)) {
+        if (inputKeys[providerId]?.trim()) configuredProviderIds.add(providerId as any);
+      }
+      const configYaml = generateLiteLLMConfig({
+        providers: providers.map(provider => ({
+          ...provider,
+          isEnabled: configuredProviderIds.has(provider.id),
+        })),
+        fallbackChains,
+        virtualAliases,
+        budget,
+        isAirGappedMode,
+      });
+      if (!configYaml.includes('  - model_name:')) {
+        setPingStatus('error');
+        setPingMessage('Credential was saved, but no LiteLLM route could be created for it. Choose a supported model before continuing.');
+        return false;
+      }
       setIsRestarting(true);
       setPingStatus('checking');
       setPingMessage('Applying credential and restarting the secure LiteLLM gateway…');
       try {
         const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('save_litellm_config', { yamlContent: configYaml });
         const restart = await invoke<{ port: number }>('restart_litellm_sidecar');
         if (restart.port > 0) setGatewayPort(restart.port);
         setPingStatus('ok');
