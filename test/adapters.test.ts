@@ -3,6 +3,7 @@ import { MCP_CATALOG, TARGET_CLIENTS_META } from '../src/data/mcpCatalogData';
 import { InstalledToolState } from '../src/types/tools';
 import {
   listCredentialSummaries,
+  hydrateProviderCredentialSummaries,
   setProviderCredential,
   deleteProviderCredential,
   loadRoutingMetadata,
@@ -879,6 +880,19 @@ async function testVaultPersistence() {
   const anthropicSummary = summaries.find(s => s.provider === 'anthropic');
   assert(anthropicSummary !== undefined && anthropicSummary.configured === true, 'Lists saved credential summary');
   assert((anthropicSummary as any).apiKey === undefined, 'Guarantees zero plaintext secret leak in summary IPC');
+
+  const hydratedProviders = hydrateProviderCredentialSummaries(
+    [
+      { id: 'anthropic', isConfigured: false, keyHint: '' },
+      { id: 'bedrock', isConfigured: false, keyHint: '' },
+    ],
+    [
+      { provider: 'bedrock', configured: true, display_hint: '••••a7K2', updated_at: Date.now() },
+    ],
+  );
+  assert(hydratedProviders[1].isConfigured, 'Hydrates an existing OS-vault credential into provider UI state');
+  assert(hydratedProviders[1].keyHint === '••••a7K2', 'Hydrates only the masked OS-vault credential hint');
+  assert(!hydratedProviders[0].isConfigured, 'Does not mark unrelated providers as configured');
 
   // 3. Routing metadata separation
   const routingData = {

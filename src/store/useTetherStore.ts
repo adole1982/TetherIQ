@@ -18,6 +18,7 @@ import {
 } from '../services/budgetPersistence';
 import {
   listCredentialSummaries,
+  hydrateProviderCredentialSummaries,
   loadRoutingMetadata,
   saveRoutingMetadata,
   purgeLegacyWebStorage,
@@ -939,18 +940,8 @@ if (typeof window !== 'undefined') {
       // 2a. Load credential summaries from OS vault
       const summaries = await listCredentialSummaries();
       if (summaries && summaries.length > 0) {
-        const summariesByProvider = new Map(summaries.map(s => [s.provider, s]));
         useTetherStore.setState((state) => ({
-          providers: state.providers.map(p => {
-            const summary = summariesByProvider.get(p.id);
-            return summary
-              ? {
-                  ...p,
-                  isConfigured: summary.configured,
-                  keyHint: summary.display_hint || p.keyHint,
-                }
-              : p;
-          })
+          providers: hydrateProviderCredentialSummaries(state.providers, summaries)
         }));
       }
 

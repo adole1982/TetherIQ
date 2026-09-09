@@ -15,6 +15,33 @@ export interface CredentialSummary {
   updated_at: number;
 }
 
+export interface ProviderCredentialStatus {
+  id: string;
+  isConfigured: boolean;
+  keyHint?: string;
+}
+
+/**
+ * Apply summary-only OS-vault metadata to provider UI state. This deliberately
+ * carries only the configured flag and masked hint, never the credential value.
+ */
+export function hydrateProviderCredentialSummaries<T extends ProviderCredentialStatus>(
+  providers: T[],
+  summaries: CredentialSummary[],
+): T[] {
+  const summariesByProvider = new Map(summaries.map(summary => [summary.provider, summary]));
+  return providers.map(provider => {
+    const summary = summariesByProvider.get(provider.id);
+    return summary
+      ? {
+          ...provider,
+          isConfigured: summary.configured,
+          keyHint: summary.display_hint || provider.keyHint,
+        }
+      : provider;
+  });
+}
+
 export interface RoutingMetadata {
   version: number;
   fallback_chains: FallbackChain[];
