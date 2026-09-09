@@ -96,10 +96,14 @@ export const KeyManagerModal: React.FC = () => {
     try {
       if (typeof window !== 'undefined' && isTauri()) {
         const { invoke } = await import('@tauri-apps/api/core');
-        const data = await invoke<any>('validate_provider_key', {
-          provider: providerId,
-          apiKey: keyToTest || ''
-        });
+        const data = keyToTest
+          ? await invoke<any>('validate_provider_key', {
+              provider: providerId,
+              apiKey: keyToTest,
+            })
+          : await invoke<any>('validate_stored_provider_credential', {
+              provider: providerId,
+            });
         setTestResults(prev => ({
           ...prev,
           [providerId]: {

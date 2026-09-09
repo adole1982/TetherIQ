@@ -2985,6 +2985,41 @@ async def _execute_key_validation(request: Request):
             }
         )
 
+    if body.get("credentialSource") == "sidecar_env":
+        credential_env = {
+            "anthropic": "ANTHROPIC_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "openrouter": "OPENROUTER_API_KEY",
+            "deepseek": "DEEPSEEK_API_KEY",
+            "groq": "GROQ_API_KEY",
+            "mistral": "MISTRAL_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+            "bedrock": "AWS_BEARER_TOKEN_BEDROCK",
+        }.get(provider)
+        if not credential_env:
+            return JSONResponse(
+                status_code=200,
+                headers={"Cache-Control": "no-store"},
+                content={
+                    "isValid": None,
+                    "verification": "unsupported",
+                    "reason": "unsupported",
+                    "message": f"Provider '{provider}' does not support stored credential validation."
+                }
+            )
+        api_key = os.environ.get(credential_env, "").strip()
+        if not api_key:
+            return JSONResponse(
+                status_code=200,
+                headers={"Cache-Control": "no-store"},
+                content={
+                    "isValid": False,
+                    "verification": "not_configured",
+                    "reason": "not_configured",
+                    "message": "No credential is currently available to the LiteLLM sidecar."
+                }
+            )
+
     # Check for forbidden control characters in apiKey
     if any(c in api_key for c in ('\r', '\n', '\0')):
         return JSONResponse(

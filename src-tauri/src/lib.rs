@@ -4813,6 +4813,36 @@ async fn validate_provider_key(
 }
 
 #[tauri::command]
+async fn validate_stored_provider_credential(
+    supervisor: tauri::State<'_, SidecarSupervisor>,
+    client: tauri::State<'_, SignedAdminClient>,
+    provider: String,
+) -> Result<serde_json::Value, String> {
+    let request = serde_json::to_vec(&serde_json::json!({
+        "provider": provider,
+        "credentialSource": "sidecar_env",
+    }))
+    .map_err(|e| format!("Failed to encode stored credential validation request: {}", e))?;
+    let (body, status) = client
+        .execute_signed_request(
+            &supervisor,
+            reqwest::Method::POST,
+            "/admin/providers/validate-key",
+            Some(request),
+        )
+        .await?;
+    let result: serde_json::Value = serde_json::from_slice(&body)
+        .map_err(|e| format!("Failed to decode provider validation response: {}", e))?;
+    if !(200..500).contains(&status) {
+        return Err(format!(
+            "Provider validation service returned HTTP status {}",
+            status
+        ));
+    }
+    Ok(result)
+}
+
+#[tauri::command]
 fn read_budget_config(app: AppHandle) -> Result<serde_json::Value, String> {
     let config_path = resolve_config_path(&app);
     let budget_file = config_path
@@ -5356,6 +5386,7 @@ pub fn run() {
             get_system_paths,
             save_litellm_config,
             validate_provider_key,
+            validate_stored_provider_credential,
             read_budget_config,
             save_budget_config,
             read_client_config,
