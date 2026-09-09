@@ -17,7 +17,7 @@ export interface CredentialSummary {
 
 export interface ProviderCredentialStatus {
   id: string;
-  isConfigured: boolean;
+  isConfigured?: boolean;
   keyHint?: string;
 }
 
