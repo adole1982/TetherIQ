@@ -4822,7 +4822,12 @@ async fn validate_stored_provider_credential(
         "provider": provider,
         "credentialSource": "sidecar_env",
     }))
-    .map_err(|e| format!("Failed to encode stored credential validation request: {}", e))?;
+    .map_err(|e| {
+        format!(
+            "Failed to encode stored credential validation request: {}",
+            e
+        )
+    })?;
     let (body, status) = client
         .execute_signed_request(
             &supervisor,
