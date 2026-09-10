@@ -18,9 +18,12 @@ import { SpendBudget } from '../types/telemetry';
 const PROVIDER_PREFIX: Record<string, string> = {
   anthropic: 'anthropic/',
   openai: 'openai/',
+  openrouter: 'openrouter/',
+  deepseek: 'deepseek/',
   bedrock: 'bedrock/',
   vertex: 'vertex_ai/',
   groq: 'groq/',
+  mistral: 'mistral/',
   ollama: 'ollama/',
 };
 
@@ -37,6 +40,10 @@ function getCredentialBlock(provider: ProviderConfig): ProviderCredentialBlock {
       return { api_key: 'os.environ/ANTHROPIC_API_KEY' };
     case 'openai':
       return { api_key: 'os.environ/OPENAI_API_KEY' };
+    case 'openrouter':
+      return { api_key: 'os.environ/OPENROUTER_API_KEY' };
+    case 'deepseek':
+      return { api_key: 'os.environ/DEEPSEEK_API_KEY' };
     case 'bedrock':
       return {
         api_key: 'os.environ/AWS_BEARER_TOKEN_BEDROCK',
@@ -49,6 +56,8 @@ function getCredentialBlock(provider: ProviderConfig): ProviderCredentialBlock {
       };
     case 'groq':
       return { api_key: 'os.environ/GROQ_API_KEY' };
+    case 'mistral':
+      return { api_key: 'os.environ/MISTRAL_API_KEY' };
     case 'ollama':
       return { api_base: provider.baseUrl || 'http://127.0.0.1:11434' };
     default:

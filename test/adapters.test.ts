@@ -996,6 +996,30 @@ function testAirGappedLocalMeshConfig() {
   assert(bedrockYaml.includes('api_key: os.environ/AWS_BEARER_TOKEN_BEDROCK'), 'Bedrock API key uses LiteLLM bearer-token configuration');
   assert(!bedrockYaml.includes('aws_access_key_id'), 'Bedrock API key configuration does not require IAM access keys');
 
+  const unifiedProviderYaml = generateLiteLLMConfig({
+    providers: [
+      { id: 'openrouter', name: 'OpenRouter', isEnabled: true } as any,
+      { id: 'deepseek', name: 'DeepSeek', isEnabled: true } as any,
+      { id: 'mistral', name: 'Mistral', isEnabled: true } as any,
+    ],
+    fallbackChains: [{
+      id: 'unified-chain', name: 'Unified', description: '', nodes: [
+        { id: 'openrouter-node', provider: 'openrouter', modelIdentifier: 'anthropic/claude-3.5-sonnet', priority: 1 },
+        { id: 'deepseek-node', provider: 'deepseek', modelIdentifier: 'deepseek-chat', priority: 2 },
+        { id: 'mistral-node', provider: 'mistral', modelIdentifier: 'mistral-large-latest', priority: 3 },
+      ],
+    } as any],
+    virtualAliases: [{ alias: 'unified', targetChainId: 'unified-chain', description: '' } as any],
+    budget: mockBudget,
+    isAirGappedMode: false,
+  });
+  assert(unifiedProviderYaml.includes('model: openrouter/anthropic/claude-3.5-sonnet'), 'OpenRouter uses LiteLLM provider prefix');
+  assert(unifiedProviderYaml.includes('api_key: os.environ/OPENROUTER_API_KEY'), 'OpenRouter credential is injected by environment reference');
+  assert(unifiedProviderYaml.includes('model: deepseek/deepseek-chat'), 'DeepSeek uses LiteLLM provider prefix');
+  assert(unifiedProviderYaml.includes('api_key: os.environ/DEEPSEEK_API_KEY'), 'DeepSeek credential is injected by environment reference');
+  assert(unifiedProviderYaml.includes('model: mistral/mistral-large-latest'), 'Mistral uses LiteLLM provider prefix');
+  assert(unifiedProviderYaml.includes('api_key: os.environ/MISTRAL_API_KEY'), 'Mistral credential is injected by environment reference');
+
   // 2. Air-Gapped offline mode config test
   const airGappedYaml = generateLiteLLMConfig({
     providers: mockProviders,
