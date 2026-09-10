@@ -46,7 +46,7 @@ export const QuickstartModal: React.FC = () => {
   const [gatewayPort, setGatewayPort] = useState<number | null>(null);
   const [isRestarting, setIsRestarting] = useState(false);
   const [dailyLimitDraft, setDailyLimitDraft] = useState('');
-  const [monthlyLimitDraft, setMonthlyLimitDraft] = useState('');
+  const [monthlyLimitDraft, setMonthlyLimitDraft] = useState('');\n  const [budgetSaveStatus, setBudgetSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');\n  const [budgetSaveMessage, setBudgetSaveMessage] = useState('');
 
   useEffect(() => {
     if (currentStep !== 2) return;
@@ -54,11 +54,25 @@ export const QuickstartModal: React.FC = () => {
     setMonthlyLimitDraft(budget.monthlyLimit == null ? '' : String(budget.monthlyLimit));
   }, [currentStep, budget.dailyLimit, budget.monthlyLimit]);
 
+  const persistBudgetDraft = async () => {
+    setBudgetSaveStatus('saving');
+    setBudgetSaveMessage('Saving spend caps…');
+    try {
+      await updateBudgetLimits(
+        dailyLimitDraft === '' ? null : dailyLimitDraft,
+        monthlyLimitDraft === '' ? null : monthlyLimitDraft,
+      );
+      setBudgetSaveStatus('saved');
+      setBudgetSaveMessage('Spend caps saved.');
+    } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : String(err);
+      setBudgetSaveStatus('error');
+      setBudgetSaveMessage(detail || 'Spend caps could not be saved.');
+    }
+  };
+
   const commitBudgetDraft = () => {
-    void updateBudgetLimits(
-      dailyLimitDraft === '' ? null : dailyLimitDraft,
-      monthlyLimitDraft === '' ? null : monthlyLimitDraft,
-    );
+    void persistBudgetDraft();
   };
 
   useEffect(() => {
@@ -455,6 +469,22 @@ export const QuickstartModal: React.FC = () => {
                   />
                   <p className="text-[11px] text-slate-500">Default recommended limit: $150.00/mo</p>
                 </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                {budgetSaveMessage && (
+                  <span className={budgetSaveStatus === 'error' ? 'text-xs text-rose-300' : 'text-xs text-emerald-300'}>
+                    {budgetSaveMessage}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void persistBudgetDraft()}
+                  disabled={budgetSaveStatus === 'saving'}
+                  className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-xs font-semibold text-slate-950"
+                >
+                  {budgetSaveStatus === 'saving' ? 'Saving…' : 'Save Spend Caps'}
+                </button>
               </div>
             </div>
           )}
