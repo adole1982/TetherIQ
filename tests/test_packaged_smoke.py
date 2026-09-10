@@ -150,6 +150,28 @@ def run_packaged_smoke_test(executable: Path) -> None:
             assert payload["generation"] == 7
             assert payload["configSha256"] == config_hash
             assert payload["airGapped"] is True
+
+            connection = http.client.HTTPConnection(
+                "127.0.0.1", ready_record["port"], timeout=3
+            )
+            try:
+                connection.request(
+                    "GET",
+                    "/v1/models",
+                    headers={"Authorization": "Bearer ci-gateway-token"},
+                )
+                models_response = connection.getresponse()
+                models_payload = json.loads(
+                    models_response.read(65536).decode("utf-8")
+                )
+            finally:
+                connection.close()
+
+            assert models_response.status == 200
+            assert any(
+                model.get("id") == "local-smoke"
+                for model in models_payload.get("data", [])
+            )
         finally:
             _terminate_process_tree(process)
 
