@@ -48,7 +48,18 @@ export const QuickstartModal: React.FC = () => {
   const [dailyLimitDraft, setDailyLimitDraft] = useState('');
   const [monthlyLimitDraft, setMonthlyLimitDraft] = useState('');
 
-  useEffect(() => {\n    if (currentStep !== 2) return;\n    setDailyLimitDraft(budget.dailyLimit == null ? '' : String(budget.dailyLimit));\n    setMonthlyLimitDraft(budget.monthlyLimit == null ? '' : String(budget.monthlyLimit));\n  }, [currentStep, budget.dailyLimit, budget.monthlyLimit]);\n\n  const commitBudgetDraft = () => {\n    void updateBudgetLimits(\n      dailyLimitDraft === '' ? null : dailyLimitDraft,\n      monthlyLimitDraft === '' ? null : monthlyLimitDraft,\n    );\n  };
+  useEffect(() => {
+    if (currentStep !== 2) return;
+    setDailyLimitDraft(budget.dailyLimit == null ? '' : String(budget.dailyLimit));
+    setMonthlyLimitDraft(budget.monthlyLimit == null ? '' : String(budget.monthlyLimit));
+  }, [currentStep, budget.dailyLimit, budget.monthlyLimit]);
+
+  const commitBudgetDraft = () => {
+    void updateBudgetLimits(
+      dailyLimitDraft === '' ? null : dailyLimitDraft,
+      monthlyLimitDraft === '' ? null : monthlyLimitDraft,
+    );
+  };
 
   useEffect(() => {
     if (!isQuickstartOpen) return;
