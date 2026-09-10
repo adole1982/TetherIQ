@@ -169,6 +169,38 @@ export const QuickstartModal: React.FC = () => {
     return true;
   };
 
+  /**
+   * Rebuild the LiteLLM config from provider state that was hydrated from the
+   * native vault. This matters when a user saved a key in an earlier session:
+   * there is no new input value to trigger the normal save path, but the
+   * generated model routes still need to be applied to the running sidecar.
+   */
+  const ensureConfiguredGatewayRoutes = async (): Promise<void> => {
+    if (typeof window === 'undefined' || !isTauri()) return;
+
+    const configuredProviderIds = new Set(
+      providers.filter(provider => provider.isConfigured).map(provider => provider.id),
+    );
+    const configYaml = generateLiteLLMConfig({
+      providers: providers.map(provider => ({
+        ...provider,
+        isEnabled: configuredProviderIds.has(provider.id),
+      })),
+      fallbackChains,
+      virtualAliases,
+      budget,
+      isAirGappedMode,
+    });
+    if (!configYaml.includes('  - model_name:')) {
+      throw new Error('No configured provider can create a LiteLLM model route yet.');
+    }
+
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('save_litellm_config', { yamlContent: configYaml });
+    const restart = await invoke<{ port: number }>('restart_litellm_sidecar');
+    if (restart.port > 0) setGatewayPort(restart.port);
+  };
+
   const handleAutoConfigureAll = async () => {
     setIsSyncing(true);
     setSyncSuccessMsg(null);
@@ -196,7 +228,15 @@ export const QuickstartModal: React.FC = () => {
         }
         port = diagnostics.proxy_port;
         setGatewayPort(port);
-        const route = await invoke<{ authenticated: boolean; model_count: number; status_code: number }>('test_gateway_route');
+        let route = await invoke<{ authenticated: boolean; model_count: number; status_code: number }>('test_gateway_route');
+        // A vault credential may already be present while the config file was
+        // generated before that credential was saved. Repair that stale state
+        // once, then re-test the authenticated LiteLLM route.
+        if (route.authenticated && route.model_count < 1) {
+          setPingMessage('Applying saved provider credentials to LiteLLM…');
+          await ensureConfiguredGatewayRoutes();
+          route = await invoke<{ authenticated: boolean; model_count: number; status_code: number }>('test_gateway_route');
+        }
         if (!route.authenticated || route.model_count < 1) {
           throw new Error(`LiteLLM gateway is ready but has no authenticated model routes (HTTP ${route.status_code}).`);
         }
