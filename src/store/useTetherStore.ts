@@ -114,7 +114,6 @@ const INITIAL_PROVIDERS: ProviderConfig[] = [
   { id: 'openrouter', name: 'OpenRouter Unified', isEnabled: true, billingMode: 'pay-per-token', isHealthy: false, lastPingMs: 0 },
   { id: 'deepseek', name: 'DeepSeek Direct', isEnabled: true, billingMode: 'pay-per-token', isHealthy: false, lastPingMs: 0 },
   { id: 'bedrock', name: 'AWS Bedrock', isEnabled: true, billingMode: 'pay-per-token', awsRegion: 'us-east-1', isHealthy: true, lastPingMs: 78 },
-  { id: 'vertex', name: 'Google Vertex AI', isEnabled: true, billingMode: 'subscription-unlimited', vertexProjectId: 'gcp-prod-analytics', vertexLocation: 'us-central1', isHealthy: true, lastPingMs: 55 },
   { id: 'groq', name: 'Groq Cloud', isEnabled: true, billingMode: 'pay-per-token', isHealthy: true, lastPingMs: 18 },
   { id: 'ollama', name: 'Local Ollama (11434)', isEnabled: true, billingMode: 'subscription-unlimited', baseUrl: 'http://localhost:11434', isHealthy: true, lastPingMs: 4 }
 ];

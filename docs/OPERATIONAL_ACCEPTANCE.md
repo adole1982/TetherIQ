@@ -8,7 +8,7 @@ This ledger records acceptance evidence for the LiteLLM-centered TetherMesh rele
 | Gateway readiness and authenticated model routes | PASS | Native `test_gateway_route` checks readiness and authenticated `/v1/models`; packaged run 42 returned one authenticated model route on a dynamic loopback port. | Repeat on run-43 install during final user-facing acceptance. |
 | Bedrock Claude path | PASS | Run-42 packaged app authenticated a Bedrock route and Claude Code returned exact `TETHERMESH_OK`. | Repeat once against run-43 package. |
 | OpenRouter, DeepSeek, and Mistral route mapping | PASS (code/CI) | Commit `18919676e46e3a4698ff973971c728ec5931a1da` adds provider prefixes and credential environment mappings; frontend/contract CI passed. | Live credentials are intentionally not required for CI. |
-| Google Vertex AI | BLOCKED | LiteLLM route generation uses `vertex_ai/` plus project/location, while the wizard presents a generic API-key field; native vault injection has no `vertex` credential path. | Implement Google ADC/project/location setup or remove the generic key presentation before claiming this path works. |
+| Google Vertex AI | OUT OF SCOPE | Removed from the advertised provider list for this release because LiteLLM requires Google ADC/project/location rather than a generic API key. The provider type and config support remain available for a future release. | Add a dedicated ADC/project/location setup flow before re-advertising it. |
 | Provider credential storage and validation | PASS / PARTIAL | Secure vault save and non-secret validation are covered by native and Python security suites; Bedrock bearer-token route works. | Define and document generic AWS credential semantics separately from bearer-token mode. |
 | Client snippets and dynamic ports | PASS (source/CI) | Platform-aware snippet generation and dynamic-port handling are covered by commit `c990c79` and subsequent CI. | Live verification beyond Claude Code remains open. |
 | Spend caps and reset audit trail | PASS (source/CI) | Atomic budget, daily/monthly caps, reset adjustments, crash recovery, and authorization suites pass in CI. | Exercise one control-plane mutation in the final packaged run. |
@@ -19,5 +19,5 @@ This ledger records acceptance evidence for the LiteLLM-centered TetherMesh rele
 
 ## Final acceptance gate
 
-The release is not marked fully accepted until the remaining runtime checks are completed and Vertex is either redesigned for its actual credential model or explicitly removed from the advertised generic-key matrix.
+The release is not marked fully accepted until the remaining runtime checks are completed. Vertex is explicitly excluded from this candidate and is reserved for a future release with a dedicated ADC/project/location setup flow.
 
