@@ -448,8 +448,9 @@ export const QuickstartModal: React.FC = () => {
                     min="0"
                     max="1000"
                     step="any"
-                    value={budget.dailyLimit ?? ''}
-                    onChange={(e) => updateBudgetLimits(e.target.value === '' ? null : e.target.value, budget.monthlyLimit)}
+                    defaultValue={budget.dailyLimit ?? ''}
+                    onChange={(e) => setDailyLimitDraft(e.target.value)}
+                    onBlur={commitBudgetDraft}
                     className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-cyan-400 font-mono font-bold focus:border-cyan-500 focus:outline-none"
                   />
                   <p className="text-[11px] text-slate-500">Default recommended limit: $10.00/day</p>
@@ -465,8 +466,9 @@ export const QuickstartModal: React.FC = () => {
                     min="0"
                     max="5000"
                     step="any"
-                    value={budget.monthlyLimit ?? ''}
-                    onChange={(e) => updateBudgetLimits(budget.dailyLimit, e.target.value === '' ? null : e.target.value)}
+                    defaultValue={budget.monthlyLimit ?? ''}
+                    onChange={(e) => setMonthlyLimitDraft(e.target.value)}
+                    onBlur={commitBudgetDraft}
                     className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-emerald-400 font-mono font-bold focus:border-cyan-500 focus:outline-none"
                   />
                   <p className="text-[11px] text-slate-500">Default recommended limit: $150.00/mo</p>
