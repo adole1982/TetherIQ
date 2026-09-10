@@ -46,7 +46,9 @@ export const QuickstartModal: React.FC = () => {
   const [gatewayPort, setGatewayPort] = useState<number | null>(null);
   const [isRestarting, setIsRestarting] = useState(false);
   const [dailyLimitDraft, setDailyLimitDraft] = useState('');
-  const [monthlyLimitDraft, setMonthlyLimitDraft] = useState('');\n  const [budgetSaveStatus, setBudgetSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');\n  const [budgetSaveMessage, setBudgetSaveMessage] = useState('');
+  const [monthlyLimitDraft, setMonthlyLimitDraft] = useState('');
+  const [budgetSaveStatus, setBudgetSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [budgetSaveMessage, setBudgetSaveMessage] = useState('');
 
   useEffect(() => {
     if (currentStep !== 2) return;
