@@ -44,7 +44,7 @@ export const QuickstartModal: React.FC = () => {
   const [pingStatus, setPingStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle');
   const [pingMessage, setPingMessage] = useState<string>('');
   const [gatewayPort, setGatewayPort] = useState<number | null>(null);
-  const [isRestarting, setIsRestarting] = useState(false);
+  const [isRestarting, setIsRestarting] = useState(false);\n  const [dailyLimitDraft, setDailyLimitDraft] = useState('');\n  const [monthlyLimitDraft, setMonthlyLimitDraft] = useState('');\n\n  useEffect(() => {\n    if (currentStep !== 2) return;\n    setDailyLimitDraft(budget.dailyLimit == null ? '' : String(budget.dailyLimit));\n    setMonthlyLimitDraft(budget.monthlyLimit == null ? '' : String(budget.monthlyLimit));\n  }, [currentStep, budget.dailyLimit, budget.monthlyLimit]);\n\n  const commitBudgetDraft = () => {\n    void updateBudgetLimits(\n      dailyLimitDraft === '' ? null : dailyLimitDraft,\n      monthlyLimitDraft === '' ? null : monthlyLimitDraft,\n    );\n  };
 
   useEffect(() => {
     if (!isQuickstartOpen) return;
