@@ -4429,6 +4429,53 @@ fn copy_gateway_environment(
 }
 
 #[tauri::command]
+async fn test_gateway_route(
+    supervisor: tauri::State<'_, SidecarSupervisor>,
+) -> Result<serde_json::Value, String> {
+    let (port, gateway_token) = {
+        let guard = supervisor.state.lock().unwrap();
+        if guard.phase != SidecarPhase::Ready || guard.bound_port == 0 {
+            return Err("LiteLLM gateway is not ready".to_string());
+        }
+        if guard.gateway_token.is_empty() {
+            return Err("Gateway credential is not initialized".to_string());
+        }
+        (guard.bound_port, guard.gateway_token.clone())
+    };
+
+    let response = reqwest::Client::new()
+        .get(format!("http://127.0.0.1:{}/v1/models", port))
+        .bearer_auth(gateway_token)
+        .send()
+        .await
+        .map_err(|e| format!("Authenticated LiteLLM route probe failed: {}", e))?;
+    let status_code = response.status().as_u16();
+    let body: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Invalid LiteLLM model response: {}", e))?;
+    let models = body
+        .get("data")
+        .and_then(|value| value.as_array())
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|entry| entry.get("id").and_then(|id| id.as_str()))
+                .take(100)
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    Ok(serde_json::json!({
+        "status_code": status_code,
+        "model_count": models.len(),
+        "models": models,
+        "authenticated": status_code == 200,
+    }))
+}
+
+#[tauri::command]
 async fn get_provider_health(
     supervisor: tauri::State<'_, SidecarSupervisor>,
     client: tauri::State<'_, SignedAdminClient>,
@@ -5379,6 +5426,7 @@ pub fn run() {
             get_mcp_catalog,
             get_proxy_status,
             copy_gateway_environment,
+            test_gateway_route,
             get_provider_health,
             open_external_url,
             update_budget_limits,

@@ -196,6 +196,13 @@ export const QuickstartModal: React.FC = () => {
         }
         port = diagnostics.proxy_port;
         setGatewayPort(port);
+        const route = await invoke<{ authenticated: boolean; model_count: number; status_code: number }>('test_gateway_route');
+        if (!route.authenticated || route.model_count < 1) {
+          throw new Error(`LiteLLM gateway is ready but has no authenticated model routes (HTTP ${route.status_code}).`);
+        }
+        setPingStatus('ok');
+        setPingMessage(`LiteLLM gateway authenticated with ${route.model_count} model route${route.model_count === 1 ? '' : 's'} on 127.0.0.1:${port}`);
+        return;
       }
 
       // The native supervisor reaches Ready only after it verifies the sidecar's
