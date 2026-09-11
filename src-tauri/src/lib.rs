@@ -1133,9 +1133,7 @@ impl BudgetLimitsPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BudgetLimitsResponse {
     pub success: bool,
-    #[serde(alias = "dailyLimitMicrousd")]
     pub daily_limit_microusd: Option<i64>,
-    #[serde(alias = "monthlyLimitMicrousd")]
     pub monthly_limit_microusd: Option<i64>,
 }
 
@@ -1147,15 +1145,10 @@ pub struct ResetSpendResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SpendSummary {
-    #[serde(alias = "dailySpentMicrousd")]
     pub daily_spent_microusd: i64,
-    #[serde(alias = "monthlySpentMicrousd")]
     pub monthly_spent_microusd: i64,
-    #[serde(alias = "dailyLimitMicrousd")]
     pub daily_limit_microusd: Option<i64>,
-    #[serde(alias = "monthlyLimitMicrousd")]
     pub monthly_limit_microusd: Option<i64>,
-    #[serde(alias = "isTripped", alias = "is_circuit_breaker_tripped")]
     pub is_tripped: bool,
 }
 
@@ -5515,11 +5508,43 @@ mod tests {
     use super::{
         constant_time_eq_hex, gateway_environment_content, parse_codex_config,
         parse_json_client_config, sha256_hex, validate_external_url, validate_numeric_loopback_url,
-        BudgetLimitsPayload, DesiredToolState, ExpectedRevision, SidecarPhase, SidecarSupervisor,
-        SignedAdminClient, ToolAssignmentState, ToolCredentialMutation, ToolSyncStatus, TriState,
+        BudgetLimitsPayload, BudgetLimitsResponse, DesiredToolState, ExpectedRevision,
+        SidecarPhase, SidecarSupervisor, SignedAdminClient, SpendSummary, ToolAssignmentState,
+        ToolCredentialMutation, ToolSyncStatus, TriState,
     };
     use std::fmt::Write;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[test]
+    fn dual_serialized_sidecar_budget_fields_decode_from_canonical_names() {
+        let budget: BudgetLimitsResponse = serde_json::from_value(serde_json::json!({
+            "success": true,
+            "daily_limit_microusd": 8_000_000,
+            "dailyLimitMicrousd": 8_000_000,
+            "monthly_limit_microusd": 140_000_000,
+            "monthlyLimitMicrousd": 140_000_000
+        }))
+        .expect("dual-serialized budget response should decode without duplicate fields");
+        assert_eq!(budget.daily_limit_microusd, Some(8_000_000));
+        assert_eq!(budget.monthly_limit_microusd, Some(140_000_000));
+
+        let summary: SpendSummary = serde_json::from_value(serde_json::json!({
+            "daily_spent_microusd": 125_000,
+            "dailySpentMicrousd": 125_000,
+            "monthly_spent_microusd": 250_000,
+            "monthlySpentMicrousd": 250_000,
+            "daily_limit_microusd": 8_000_000,
+            "dailyLimitMicrousd": 8_000_000,
+            "monthly_limit_microusd": 140_000_000,
+            "monthlyLimitMicrousd": 140_000_000,
+            "is_tripped": false,
+            "isTripped": false
+        }))
+        .expect("dual-serialized spend summary should decode without duplicate fields");
+        assert_eq!(summary.daily_spent_microusd, 125_000);
+        assert_eq!(summary.monthly_spent_microusd, 250_000);
+        assert!(!summary.is_tripped);
+    }
 
     #[test]
     fn gateway_environment_uses_the_supervised_port_and_platform_shell() {
