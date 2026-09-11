@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import hmac
 import http.client
 import json
 import os
@@ -171,6 +172,69 @@ def run_packaged_smoke_test(executable: Path) -> None:
             assert any(
                 model.get("id") == "local-smoke"
                 for model in models_payload.get("data", [])
+            )
+
+
+            budget_body = json.dumps(
+                {
+                    "daily_limit_microusd": 9_000_000,
+                    "monthly_limit_microusd": 148_000_000,
+                },
+                separators=(",", ":"),
+            ).encode("utf-8")
+            timestamp = str(int(time.time()))
+            nonce = "ci-packaged-budget-save"
+            request_payload = (
+                f"POST\n/spend/budget\n{timestamp}\n{nonce}\n"
+                f"{hashlib.sha256(budget_body).hexdigest()}\n7"
+            ).encode("utf-8")
+            request_signature = hmac.new(
+                b"ci-handshake-secret", request_payload, hashlib.sha256
+            ).hexdigest()
+
+            connection = http.client.HTTPConnection(
+                "127.0.0.1", ready_record["port"], timeout=3
+            )
+            try:
+                connection.request(
+                    "POST",
+                    "/spend/budget",
+                    body=budget_body,
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Tether-Signature": request_signature,
+                        "X-Tether-Timestamp": timestamp,
+                        "X-Tether-Nonce": nonce,
+                        "X-Tether-Generation": "7",
+                    },
+                )
+                budget_response = connection.getresponse()
+                budget_response_body = budget_response.read(65536)
+            finally:
+                connection.close()
+
+            assert budget_response.status == 200, budget_response_body.decode(
+                "utf-8", errors="replace"
+            )
+            budget_payload = json.loads(budget_response_body.decode("utf-8"))
+            assert budget_payload["daily_limit_microusd"] == 9_000_000
+            assert budget_payload["monthly_limit_microusd"] == 148_000_000
+
+            response_signature = budget_response.getheader(
+                "X-Tether-Response-Signature"
+            )
+            expected_response_payload = (
+                f"{nonce}\n{budget_response.status}\n"
+                f"{hashlib.sha256(budget_response_body).hexdigest()}"
+            ).encode("utf-8")
+            expected_response_signature = hmac.new(
+                b"ci-handshake-secret",
+                expected_response_payload,
+                hashlib.sha256,
+            ).hexdigest()
+            assert response_signature is not None
+            assert hmac.compare_digest(
+                response_signature, expected_response_signature
             )
         finally:
             _terminate_process_tree(process)
