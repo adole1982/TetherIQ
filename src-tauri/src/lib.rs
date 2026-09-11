@@ -1135,6 +1135,9 @@ pub struct BudgetLimitsResponse {
     pub success: bool,
     pub daily_limit_microusd: Option<i64>,
     pub monthly_limit_microusd: Option<i64>,
+    pub daily_limit_usd: Option<f64>,
+    pub monthly_limit_usd: Option<f64>,
+    pub is_tripped: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1150,6 +1153,16 @@ pub struct SpendSummary {
     pub daily_limit_microusd: Option<i64>,
     pub monthly_limit_microusd: Option<i64>,
     pub is_tripped: bool,
+    pub daily_spent_usd: f64,
+    pub monthly_spent_usd: f64,
+    pub daily_limit_usd: Option<f64>,
+    pub monthly_limit_usd: Option<f64>,
+    pub daily_remaining_usd: Option<f64>,
+    pub monthly_remaining_usd: Option<f64>,
+    pub trip_reason: Option<String>,
+    pub total_tokens: i64,
+    pub period: String,
+    pub today_key: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -5522,11 +5535,20 @@ mod tests {
             "daily_limit_microusd": 8_000_000,
             "dailyLimitMicrousd": 8_000_000,
             "monthly_limit_microusd": 140_000_000,
-            "monthlyLimitMicrousd": 140_000_000
+            "monthlyLimitMicrousd": 140_000_000,
+            "daily_limit_usd": 8.0,
+            "dailyLimit": 8.0,
+            "monthly_limit_usd": 140.0,
+            "monthlyLimit": 140.0,
+            "is_tripped": false,
+            "isTripped": false
         }))
         .expect("dual-serialized budget response should decode without duplicate fields");
         assert_eq!(budget.daily_limit_microusd, Some(8_000_000));
         assert_eq!(budget.monthly_limit_microusd, Some(140_000_000));
+        assert_eq!(budget.daily_limit_usd, Some(8.0));
+        assert_eq!(budget.monthly_limit_usd, Some(140.0));
+        assert!(!budget.is_tripped);
 
         let summary: SpendSummary = serde_json::from_value(serde_json::json!({
             "daily_spent_microusd": 125_000,
@@ -5538,11 +5560,32 @@ mod tests {
             "monthly_limit_microusd": 140_000_000,
             "monthlyLimitMicrousd": 140_000_000,
             "is_tripped": false,
-            "isTripped": false
+            "isTripped": false,
+            "daily_spent_usd": 0.125,
+            "dailySpentUsd": 0.125,
+            "monthly_spent_usd": 0.25,
+            "monthlySpentUsd": 0.25,
+            "daily_limit_usd": 8.0,
+            "dailyLimitUsd": 8.0,
+            "monthly_limit_usd": 140.0,
+            "monthlyLimitUsd": 140.0,
+            "daily_remaining_usd": 7.875,
+            "dailyRemainingUsd": 7.875,
+            "monthly_remaining_usd": 139.75,
+            "monthlyRemainingUsd": 139.75,
+            "trip_reason": null,
+            "tripReason": null,
+            "total_tokens": 321,
+            "totalTokens": 321,
+            "period": "2026-09-11",
+            "today_key": "2026-09-11"
         }))
         .expect("dual-serialized spend summary should decode without duplicate fields");
         assert_eq!(summary.daily_spent_microusd, 125_000);
         assert_eq!(summary.monthly_spent_microusd, 250_000);
+        assert_eq!(summary.daily_limit_usd, Some(8.0));
+        assert_eq!(summary.monthly_limit_usd, Some(140.0));
+        assert_eq!(summary.total_tokens, 321);
         assert!(!summary.is_tripped);
     }
 
