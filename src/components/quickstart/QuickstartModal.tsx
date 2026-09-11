@@ -73,10 +73,6 @@ export const QuickstartModal: React.FC = () => {
     }
   };
 
-  const commitBudgetDraft = () => {
-    void persistBudgetDraft();
-  };
-
   useEffect(() => {
     if (!isQuickstartOpen) return;
 
