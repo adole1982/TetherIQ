@@ -33,6 +33,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 from importlib.machinery import ModuleSpec
 import hashlib
+import hmac
 import threading
 import math
 import secrets
