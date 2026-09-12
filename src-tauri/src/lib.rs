@@ -4366,8 +4366,8 @@ fn gateway_environment_content(
     #[cfg(target_os = "windows")]
     let content = match client {
         "anthropic" => format!(
-            "$env:ANTHROPIC_BASE_URL = \"http://127.0.0.1:{}\"\n$env:ANTHROPIC_API_KEY = \"{}\"",
-            port, gateway_token
+            "Remove-Item Env:CLAUDE_CODE_USE_BEDROCK,Env:CLAUDE_CODE_USE_VERTEX,Env:ANTHROPIC_BEDROCK_BASE_URL,Env:ANTHROPIC_VERTEX_BASE_URL -ErrorAction SilentlyContinue\n$env:ANTHROPIC_BASE_URL = \"http://127.0.0.1:{}\"\n$env:ANTHROPIC_AUTH_TOKEN = \"{}\"\n$env:ANTHROPIC_API_KEY = \"{}\"",
+            port, gateway_token, gateway_token
         ),
         "openai" => format!(
             "$env:OPENAI_BASE_URL = \"http://127.0.0.1:{}/v1\"\n$env:OPENAI_API_KEY = \"{}\"",
@@ -4379,8 +4379,8 @@ fn gateway_environment_content(
     #[cfg(not(target_os = "windows"))]
     let content = match client {
         "anthropic" => format!(
-            "export ANTHROPIC_BASE_URL=http://127.0.0.1:{}\nexport ANTHROPIC_API_KEY={}",
-            port, gateway_token
+            "unset CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX ANTHROPIC_BEDROCK_BASE_URL ANTHROPIC_VERTEX_BASE_URL\nexport ANTHROPIC_BASE_URL=http://127.0.0.1:{}\nexport ANTHROPIC_AUTH_TOKEN={}\nexport ANTHROPIC_API_KEY={}",
+            port, gateway_token, gateway_token
         ),
         "openai" => format!(
             "export OPENAI_BASE_URL=http://127.0.0.1:{}/v1\nexport OPENAI_API_KEY={}",
@@ -5608,12 +5608,12 @@ mod tests {
         #[cfg(target_os = "windows")]
         assert_eq!(
             content,
-            "$env:ANTHROPIC_BASE_URL = \"http://127.0.0.1:48123\"\n$env:ANTHROPIC_API_KEY = \"test-gateway-token\""
+            "Remove-Item Env:CLAUDE_CODE_USE_BEDROCK,Env:CLAUDE_CODE_USE_VERTEX,Env:ANTHROPIC_BEDROCK_BASE_URL,Env:ANTHROPIC_VERTEX_BASE_URL -ErrorAction SilentlyContinue\n$env:ANTHROPIC_BASE_URL = \"http://127.0.0.1:48123\"\n$env:ANTHROPIC_AUTH_TOKEN = \"test-gateway-token\"\n$env:ANTHROPIC_API_KEY = \"test-gateway-token\""
         );
         #[cfg(not(target_os = "windows"))]
         assert_eq!(
             content,
-            "export ANTHROPIC_BASE_URL=http://127.0.0.1:48123\nexport ANTHROPIC_API_KEY=test-gateway-token"
+            "unset CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX ANTHROPIC_BEDROCK_BASE_URL ANTHROPIC_VERTEX_BASE_URL\nexport ANTHROPIC_BASE_URL=http://127.0.0.1:48123\nexport ANTHROPIC_AUTH_TOKEN=test-gateway-token\nexport ANTHROPIC_API_KEY=test-gateway-token"
         );
     }
 
