@@ -5480,6 +5480,11 @@ pub fn run() {
             );
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
+                // Startup and every later restart share one transition lock. Without
+                // this guard, a credential save or route repair can race the initial
+                // cold start, overwrite its PID/job handle, and leave both callers
+                // waiting on different gateway generations.
+                let _transition_guard = TRANSITION_LOCK.lock().await;
                 match spawn_litellm_sidecar(app_handle, supervisor_state.clone()).await {
                     Ok(child) => {
                         let mut guard = supervisor_state.lock().unwrap();
