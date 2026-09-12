@@ -20,6 +20,9 @@ import { setProviderCredential } from '../../services/vaultPersistence';
 import { generateLiteLLMConfig } from '../../services/litellmConfigService';
 import { isTauri } from '@tauri-apps/api/core';
 
+const GATEWAY_STARTUP_POLL_INTERVAL_MS = 2_000;
+const GATEWAY_STARTUP_TIMEOUT_MS = 300_000;
+
 export const QuickstartModal: React.FC = () => {
   const { 
     isQuickstartOpen, 
@@ -87,7 +90,14 @@ export const QuickstartModal: React.FC = () => {
       if (cancelled) return;
 
       setPingStatus('checking');
-      setPingMessage('Starting the secure local LiteLLM gateway…');
+      const elapsedSeconds = Math.round(
+        (attempts * GATEWAY_STARTUP_POLL_INTERVAL_MS) / 1_000,
+      );
+      setPingMessage(
+        elapsedSeconds === 0
+          ? 'Starting the secure local LiteLLM gateway…'
+          : `Securing the local LiteLLM gateway… ${elapsedSeconds}s elapsed. First launch can take several minutes on Windows.`,
+      );
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         const diagnostics = await invoke<{ proxy_running: boolean; proxy_port: number }>('get_gateway_diagnostics');
@@ -102,12 +112,12 @@ export const QuickstartModal: React.FC = () => {
       }
 
       attempts += 1;
-      if (attempts >= 90) {
+      if (attempts * GATEWAY_STARTUP_POLL_INTERVAL_MS >= GATEWAY_STARTUP_TIMEOUT_MS) {
         setPingStatus('error');
-        setPingMessage('The LiteLLM gateway did not become ready. Retry Gateway to check again.');
+        setPingMessage('The LiteLLM gateway did not become ready within 5 minutes. Retry Gateway to check again.');
         return;
       }
-      timer = setTimeout(waitForGateway, 2000);
+      timer = setTimeout(waitForGateway, GATEWAY_STARTUP_POLL_INTERVAL_MS);
     };
 
     void waitForGateway();
@@ -311,7 +321,7 @@ export const QuickstartModal: React.FC = () => {
               <Network className="w-4 h-4 text-cyan-400" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">TetherMesh 60-Second Setup Wizard</h2>
+              <h2 className="text-base font-bold text-white">TetherMesh Secure Setup Wizard</h2>
               <p className="text-xs text-slate-400">Zero-config control plane setup for autonomous AI coding agents</p>
             </div>
           </div>
