@@ -12,6 +12,7 @@ Tests:
 import os
 import unittest
 from collections import namedtuple
+from pathlib import Path
 
 RunningChild = namedtuple("RunningChild", ["generation", "pid", "instance_id", "child_id"])
 
@@ -120,6 +121,23 @@ class TestM06LifecycleAndHealth(unittest.TestCase):
         self.assertTrue(marked)
         self.assertEqual(runtime.phase, "monitor_lost")
         self.assertIsNotNone(runtime.child, "Must NOT drop child handle on monitor lost so process can still be killed")
+
+    def test_initial_startup_shares_transition_lock_with_restarts(self):
+        """The automatic cold start must not overlap a user-triggered restart."""
+        rust_source = (
+            Path(__file__).resolve().parents[1] / "src-tauri" / "src" / "lib.rs"
+        ).read_text(encoding="utf-8")
+        setup_start = rust_source.index(".setup(|app|")
+        setup_end = rust_source.index("            Ok(())", setup_start)
+        setup_body = rust_source[setup_start:setup_end]
+
+        lock_position = setup_body.index("TRANSITION_LOCK.lock().await")
+        spawn_position = setup_body.index("spawn_litellm_sidecar(")
+        self.assertLess(
+            lock_position,
+            spawn_position,
+            "Initial startup must acquire the transition lock before spawning LiteLLM",
+        )
 
 
 if __name__ == "__main__":
