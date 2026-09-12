@@ -22,28 +22,30 @@ export const DynamicCredentialDrawer: React.FC = () => {
     selectedToolForDrawer, 
     setSelectedToolForDrawer, 
     installedTools, 
-    saveToolConfig 
+    saveToolConfig,
+    revokeToolConfig
   } = useTetherStore();
 
   const [selectedClients, setSelectedClients] = useState<TargetClientId[]>(['cursor', 'claude-code']);
   const [credentials, setCredentials] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isRevoking, setIsRevoking] = useState(false);
   const [isSavedSuccess, setIsSavedSuccess] = useState(false);
+  const [drawerError, setDrawerError] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectedToolForDrawer) {
       const existing = installedTools.find(t => t.toolId === selectedToolForDrawer.id);
       if (existing) {
         setSelectedClients(existing.targetClients);
-        setCredentials(existing.credentials);
       } else {
         setSelectedClients(['cursor', 'windsurf', 'claude-code', 'antigravity']);
-        const initialCreds: Record<string, string> = {};
-        for (const field of selectedToolForDrawer.fields) {
-          if (field.defaultValue) initialCreds[field.key] = field.defaultValue;
-        }
-        setCredentials(initialCreds);
       }
+      setCredentials({});
+      setDrawerError(null);
+    } else {
+      setCredentials({});
+      setDrawerError(null);
     }
   }, [selectedToolForDrawer, installedTools]);
 
@@ -61,15 +63,48 @@ export const DynamicCredentialDrawer: React.FC = () => {
     setCredentials(prev => ({ ...prev, [key]: value }));
   };
 
+  const handleClose = () => {
+    setCredentials({});
+    setDrawerError(null);
+    setSelectedToolForDrawer(null);
+  };
+
   const handleSaveAndInject = async () => {
     setIsSaving(true);
-    await saveToolConfig(selectedToolForDrawer.id, credentials, selectedClients, true);
-    setIsSaving(false);
-    setIsSavedSuccess(true);
-    setTimeout(() => {
-      setIsSavedSuccess(false);
+    setDrawerError(null);
+    try {
+      await saveToolConfig(selectedToolForDrawer.id, credentials, selectedClients, true);
+      setIsSavedSuccess(true);
+      setTimeout(() => {
+        setIsSavedSuccess(false);
+        setSelectedToolForDrawer(null);
+      }, 1200);
+    } catch (err: any) {
+      console.error('[ToolDrawer] Save error occurred:', err);
+      setDrawerError(err?.message || 'Failed to configure tool');
+    } finally {
+      setIsSaving(false);
+      setCredentials({});
+    }
+  };
+
+  const isCurrentlyInstalled = installedTools.some(t => t.toolId === selectedToolForDrawer.id);
+
+  const handleRevoke = async () => {
+    if (!window.confirm(`Are you sure you want to revoke and disconnect ${selectedToolForDrawer.name}? This will remove it from all IDE configs and delete its credentials from the OS vault.`)) {
+      return;
+    }
+    setIsRevoking(true);
+    setDrawerError(null);
+    try {
+      await revokeToolConfig(selectedToolForDrawer.id);
       setSelectedToolForDrawer(null);
-    }, 1200);
+    } catch (err: any) {
+      console.error('[ToolDrawer] Revoke error occurred:', err);
+      setDrawerError(err?.message || 'Failed to revoke tool');
+    } finally {
+      setIsRevoking(false);
+    }
   };
 
   return (
@@ -95,12 +130,28 @@ export const DynamicCredentialDrawer: React.FC = () => {
           </div>
 
           <button
-            onClick={() => setSelectedToolForDrawer(null)}
+            onClick={handleClose}
             className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Error Alert Banner */}
+        {drawerError && (
+          <div className="px-6 py-2.5 bg-rose-500/10 border-b border-rose-500/20 text-rose-300 text-xs flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span>⚠️</span>
+              <span className="font-mono">{drawerError}</span>
+            </div>
+            <button
+              onClick={() => setDrawerError(null)}
+              className="text-rose-400 hover:text-rose-200 text-xs font-semibold underline ml-3"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Form Body */}
         <div className="p-6 overflow-y-auto flex-1 space-y-5">
@@ -170,26 +221,68 @@ export const DynamicCredentialDrawer: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-3">
-                {selectedToolForDrawer.fields.map((field) => (
-                  <div key={field.key} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-mono text-cyan-300 font-semibold">{field.key}</span>
-                      {field.required ? (
-                        <span className="text-[10px] text-rose-400 font-medium">Required</span>
-                      ) : (
-                        <span className="text-[10px] text-slate-500 font-medium">Optional</span>
+                {selectedToolForDrawer.fields.map((field) => {
+                  const currentValue = credentials[field.key] || '';
+                  const hasValue = currentValue.trim().length > 0;
+                  const isInvalid = hasValue && field.validationRegex && !new RegExp(field.validationRegex).test(currentValue);
+
+                  return (
+                    <div key={field.key} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-mono text-cyan-300 font-semibold">{field.key}</span>
+                          {field.helpUrl && (
+                            <a
+                              href={field.helpUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] text-cyan-400 hover:underline flex items-center space-x-0.5"
+                            >
+                              <span>Get Token</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          )}
+                        </div>
+                        {field.required ? (
+                          <span className="text-[10px] text-rose-400 font-medium">Required</span>
+                        ) : (
+                          <span className="text-[10px] text-slate-500 font-medium">Optional</span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400">{field.description}</p>
+                      {(() => {
+                        const existingTool = installedTools.find(t => t.toolId === selectedToolForDrawer.id);
+                        const hint = existingTool?.fieldHints?.[field.key];
+                        const placeholderText = hint ? `Configured in OS Vault (${hint})` : (field.placeholder || `Enter ${field.label}...`);
+                        return (
+                          <input
+                            type={field.type === 'password' ? 'password' : 'text'}
+                            placeholder={placeholderText}
+                            value={currentValue}
+                            onChange={(e) => {
+                              let val = e.target.value;
+                              // Automatically normalize Windows backslashes in paths to forward slashes
+                              if (field.isPositionalArg || field.key.includes('PATH') || field.key.includes('DIR')) {
+                                val = val.replace(/\\/g, '/');
+                              }
+                              handleCredentialChange(field.key, val);
+                            }}
+                            className={`w-full bg-slate-950 border rounded-lg px-3 py-2 text-xs text-slate-200 font-mono focus:outline-none transition-colors ${
+                              isInvalid 
+                                ? 'border-rose-500/70 focus:border-rose-500' 
+                                : 'border-slate-800 focus:border-cyan-500'
+                            }`}
+                          />
+                        );
+                      })()}
+                      {isInvalid && field.validationMessage && (
+                        <p className="text-[10px] text-rose-400 font-mono flex items-center space-x-1">
+                          <span>⚠️ {field.validationMessage}</span>
+                        </p>
                       )}
                     </div>
-                    <p className="text-[11px] text-slate-400">{field.description}</p>
-                    <input
-                      type={field.type === 'password' ? 'password' : 'text'}
-                      placeholder={field.placeholder || `Enter ${field.label}...`}
-                      value={credentials[field.key] || ''}
-                      onChange={(e) => handleCredentialChange(field.key, e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 font-mono focus:border-cyan-500 focus:outline-none"
-                    />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -205,13 +298,22 @@ export const DynamicCredentialDrawer: React.FC = () => {
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between">
-          <span className="text-xs text-slate-400">
-            Will safely update <span className="text-cyan-400 font-semibold">{selectedClients.length}</span> client configuration files
-          </span>
+          <div>
+            {isCurrentlyInstalled && (
+              <button
+                type="button"
+                onClick={handleRevoke}
+                disabled={isRevoking || isSaving}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors"
+              >
+                {isRevoking ? 'Revoking...' : 'Revoke & Disconnect'}
+              </button>
+            )}
+          </div>
 
           <div className="flex items-center space-x-2">
             <button
-              onClick={() => setSelectedToolForDrawer(null)}
+              onClick={handleClose}
               className="px-4 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
             >
               Cancel

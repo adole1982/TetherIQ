@@ -1,6 +1,8 @@
 export type ProviderId = 
   | 'anthropic'
   | 'openai'
+  | 'openrouter'
+  | 'deepseek'
   | 'bedrock'
   | 'vertex'
   | 'groq'
@@ -23,6 +25,8 @@ export interface ProviderConfig {
   vertexLocation?: string;
   customHeaders?: Record<string, string>;
   isHealthy: boolean;
+  isConfigured?: boolean;
+  keyHint?: string;
   lastPingMs?: number;
 }
 
@@ -49,4 +53,24 @@ export interface VirtualModelAlias {
   alias: string; // e.g. 'fast-code', 'heavy-reasoning', 'cheapest'
   targetChainId: string;
   description: string;
+}
+
+export interface DiscoveredLocalModel {
+  name: string;
+  engine: 'ollama' | 'lm-studio' | 'vllm';
+  sizeBytes?: number;
+  format?: string;
+  family?: string;
+  contextLength?: number;
+}
+
+export interface LocalMeshStatus {
+  isScanning: boolean;
+  lastScannedAt?: number;
+  ollamaRunning: boolean;
+  ollamaUrl: string;
+  lmStudioRunning: boolean;
+  lmStudioUrl: string;
+  discoveredModels: DiscoveredLocalModel[];
+  allModelIdentifiers: string[];
 }

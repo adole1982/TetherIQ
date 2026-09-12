@@ -1,0 +1,109 @@
+name: Windows native baseline
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "src-tauri/**"
+      - "sidecar/**"
+      - "src/**"
+      - ".github/workflows/windows-native-baseline.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  native-baseline:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Build frontend assets
+        run: npm run build
+      - name: Install sidecar dependencies
+        run: python -m pip install pyinstaller -r sidecar/requirements.txt
+      - name: Run Python security tests
+        run: python -m unittest discover -s tests -v
+      - name: Run standalone air-gap security tests
+        run: python sidecar/test_airgap_security.py
+      - name: Package authoritative sidecar
+        working-directory: sidecar
+        run: python -m PyInstaller litellm-proxy.spec --noconfirm --clean
+      - name: Stage complete sidecar distribution
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force src-tauri/binaries | Out-Null
+          Copy-Item -LiteralPath sidecar/dist/litellm-proxy/litellm-proxy.exe -Destination src-tauri/binaries/litellm-proxy-x86_64-pc-windows-msvc.exe
+          Copy-Item -LiteralPath sidecar/dist/litellm-proxy/_internal -Destination src-tauri/binaries/_internal -Recurse
+      - name: Smoke-test packaged LiteLLM sidecar
+        shell: pwsh
+        run: |
+          $configPath = Join-Path $env:RUNNER_TEMP 'litellm-smoke.yaml'
+          $stdoutPath = Join-Path $env:RUNNER_TEMP 'litellm-smoke.stdout.log'
+          $stderrPath = Join-Path $env:RUNNER_TEMP 'litellm-smoke.stderr.log'
+          @'
+          model_list:
+            - model_name: local-smoke
+              litellm_params:
+                model: ollama/smoke
+                api_base: http://127.0.0.1:9
+          '@ | Set-Content -LiteralPath $configPath -Encoding utf8
+          $env:TETHER_SUPERVISED = '1'
+          $env:TETHER_HANDSHAKE_SECRET = 'ci-handshake-secret'
+          $env:TETHER_GATEWAY_TOKEN = 'ci-gateway-token'
+          $env:TETHER_INSTANCE_ID = 'ci-packaged-smoke'
+          $env:TETHER_GENERATION = '1'
+          $process = Start-Process -FilePath 'sidecar/dist/litellm-proxy/litellm-proxy.exe' -ArgumentList @('--port', '0', '--config', $configPath) -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+          try {
+            $ready = $false
+            for ($attempt = 0; $attempt -lt 120; $attempt++) {
+            if ($process.HasExited) {
+              throw "Packaged LiteLLM sidecar exited before readiness. stdout: $(Get-Content -LiteralPath $stdoutPath -Raw) stderr: $(Get-Content -LiteralPath $stderrPath -Raw)"
+              }
+              if ((Test-Path -LiteralPath $stdoutPath) -and (Select-String -LiteralPath $stdoutPath -Pattern '[TETHER_READY]:' -SimpleMatch -Quiet)) {
+                $ready = $true
+                break
+              }
+              Start-Sleep -Milliseconds 500
+            }
+            if (-not $ready) {
+              throw "Packaged LiteLLM sidecar did not reach readiness. stdout: $(Get-Content -LiteralPath $stdoutPath -Raw) stderr: $(Get-Content -LiteralPath $stderrPath -Raw)"
+            }
+          } finally {
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+            }
+          }
+      - name: Rust formatting and parsing
+        if: ${{ !cancelled() }}
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+      - name: Compile all native targets
+        if: ${{ !cancelled() }}
+        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
+      - name: Clippy with warnings denied
+        if: ${{ !cancelled() }}
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      - name: Native tests
+        if: ${{ !cancelled() }}
+        run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets
+        env:
+          TETHER_PACKAGED_SIDECAR_TEST: '1'
