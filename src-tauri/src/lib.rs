@@ -20,6 +20,7 @@ use tauri_plugin_shell::ShellExt;
 
 pub const VAULT_SERVICE: &str = "tetheriq";
 pub const MAX_BACKUPS_RETAINED: usize = 5;
+pub const SIDECAR_READY_TIMEOUT_SECS: u64 = 300;
 
 static CONFIG_WRITE_LOCK: Mutex<()> = Mutex::new(());
 static TRANSITION_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -849,10 +850,9 @@ pub async fn spawn_litellm_sidecar<R: tauri::Runtime>(
         }
     });
 
-    // The signed Windows LiteLLM bundle can take longer than a minute to unpack
-    // and initialize on a cold start. Keep the gateway in the supervised startup
-    // state long enough to receive its authenticated readiness signal.
-    const SIDECAR_READY_TIMEOUT_SECS: u64 = 180;
+    // The signed Windows LiteLLM bundle can take several minutes to initialize
+    // on a first launch while endpoint protection scans the packaged runtime.
+    // Keep supervision active until the authenticated readiness signal arrives.
     match tokio::time::timeout(
         std::time::Duration::from_secs(SIDECAR_READY_TIMEOUT_SECS),
         ready_rx,
@@ -5528,10 +5528,15 @@ mod tests {
         parse_json_client_config, sha256_hex, validate_external_url, validate_numeric_loopback_url,
         BudgetLimitsPayload, BudgetLimitsResponse, DesiredToolState, ExpectedRevision,
         SidecarPhase, SidecarSupervisor, SignedAdminClient, SpendSummary, ToolAssignmentState,
-        ToolCredentialMutation, ToolSyncStatus, TriState,
+        ToolCredentialMutation, ToolSyncStatus, TriState, SIDECAR_READY_TIMEOUT_SECS,
     };
     use std::fmt::Write;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[test]
+    fn sidecar_ready_timeout_covers_slow_windows_cold_starts() {
+        assert_eq!(SIDECAR_READY_TIMEOUT_SECS, 300);
+    }
 
     #[test]
     fn dual_serialized_sidecar_budget_fields_decode_from_canonical_names() {
