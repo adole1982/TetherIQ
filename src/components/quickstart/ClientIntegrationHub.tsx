@@ -15,11 +15,11 @@ import {
   Sparkles,
   Network
 } from 'lucide-react';
-import { CLIENT_INTEGRATIONS, ClientIntegrationGuide } from '../../data/clientIntegrations';
+import { CLIENT_INTEGRATIONS, ClientIntegrationGuide, getClientCommandSnippet } from '../../data/clientIntegrations';
 import { useTetherStore } from '../../store/useTetherStore';
 
 export const ClientIntegrationHub: React.FC = () => {
-  const { syncAllTools } = useTetherStore();
+  const { syncAllTools, proxyPort } = useTetherStore();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [autoConfiguringId, setAutoConfiguringId] = useState<string | null>(null);
   const [autoConfiguredSuccessId, setAutoConfiguredSuccessId] = useState<string | null>(null);
@@ -29,6 +29,9 @@ export const ClientIntegrationHub: React.FC = () => {
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
+
+  const snippetFor = (client: ClientIntegrationGuide) =>
+    client.codeSnippet || getClientCommandSnippet(client, proxyPort);
 
   const handleAutoConfigure = async (client: ClientIntegrationGuide) => {
     setAutoConfiguringId(client.id);
@@ -131,7 +134,7 @@ export const ClientIntegrationHub: React.FC = () => {
                   <div className="flex items-center justify-between text-[11px] text-slate-400">
                     <span>Integration Command / Code</span>
                     <button
-                      onClick={() => handleCopy(client.id, client.codeSnippet || client.commandSnippet)}
+                onClick={() => handleCopy(client.id, snippetFor(client))}
                       className="flex items-center space-x-1 text-cyan-400 hover:text-cyan-300 transition-colors"
                     >
                       {isCopied ? (
@@ -149,7 +152,7 @@ export const ClientIntegrationHub: React.FC = () => {
                   </div>
 
                   <pre className="font-mono text-xs text-cyan-300 bg-slate-950 p-3 rounded-lg border border-slate-800/80 overflow-x-auto max-h-36 select-text">
-                    {client.codeSnippet || client.commandSnippet}
+              {snippetFor(client)}
                   </pre>
                 </div>
               </div>
@@ -182,7 +185,7 @@ export const ClientIntegrationHub: React.FC = () => {
                   </button>
                 ) : (
                   <button
-                    onClick={() => handleCopy(client.id, client.codeSnippet || client.commandSnippet)}
+              onClick={() => handleCopy(client.id, snippetFor(client))}
                     className="w-full flex items-center justify-center space-x-2 py-2 px-3 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
                   >
                     <Copy className="w-3.5 h-3.5 text-slate-400" />

@@ -13,6 +13,24 @@ export interface ClientIntegrationGuide {
   docsUrl: string;
 }
 
+export function getClientCommandSnippet(
+  client: ClientIntegrationGuide,
+  port = 4000,
+  isWindows = /Windows/i.test(typeof navigator === 'undefined' ? '' : navigator.userAgent),
+): string {
+  const endpoint = `http://127.0.0.1:${port}`;
+  if (client.id === 'claude-code' && isWindows) {
+    return `# PowerShell (Copy Connection Command copies the gateway token securely)\n$env:ANTHROPIC_BASE_URL=\"${endpoint}\"\nclaude`;
+  }
+  if (client.id === 'windsurf' && isWindows) {
+    return '# Windsurf MCP Settings File\n%USERPROFILE%\\.codeium\\windsurf\\mcp_config.json';
+  }
+  if (client.id === 'devin' && isWindows) {
+    return '# Devin Workspace Config\n%USERPROFILE%\\.devin\\config.json';
+  }
+  return client.commandSnippet.replaceAll('http://127.0.0.1:4000', endpoint);
+}
+
 export const CLIENT_INTEGRATIONS: ClientIntegrationGuide[] = [
   {
     id: 'claude-code',

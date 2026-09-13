@@ -4,9 +4,10 @@ import {
   Zap, 
   Clock, 
   ShieldAlert, 
+  Shield,
   TrendingUp, 
   Flame, 
-  RefreshCw,
+  RefreshCw, 
   Terminal,
   Bot
 } from 'lucide-react';
@@ -30,14 +31,40 @@ export const LiveTelemetryHUD: React.FC = () => {
     resetCircuitBreaker,
     connectedAgents,
     traces,
-    isProxyRunning
+    isProxyRunning,
+    isAirGappedMode,
+    toggleAirGappedMode
   } = useTetherStore();
 
+  const safeNumber = (value: unknown): number => Number.isFinite(Number(value)) ? Number(value) : 0;
+  const displayTokensPerSec = safeNumber(currentTokensPerSec);
+  const displayBurnRate = safeNumber(currentBurnRatePerHour);
+  const displayDailySpend = safeNumber(budget.currentDailySpend);
+  const displayDailyLimit = budget.dailyLimit === null ? null : safeNumber(budget.dailyLimit);
+
   const totalTokensToday = telemetryHistory.reduce((acc, t) => acc + t.inputTokens + t.outputTokens, 0);
-  const budgetPercentage = Math.min(100, budget.dailyLimit > 0 ? (budget.currentDailySpend / budget.dailyLimit) * 100 : 0);
+  const budgetPercentage = Math.min(100, (displayDailyLimit ?? 0) > 0 ? (displayDailySpend / (displayDailyLimit ?? 1)) * 100 : 0);
 
   return (
     <div className="space-y-6">
+      {/* Air-Gapped Offline Mode Banner */}
+      {isAirGappedMode && (
+        <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between">
+          <div className="flex items-center space-x-2.5">
+            <Shield className="w-4 h-4 text-amber-400" />
+            <span className="text-xs font-semibold text-amber-200">
+              🛡️ Air-Gapped Local Mesh Active — All requests routed exclusively to local Ollama / LM Studio instances. Zero cloud telemetry.
+            </span>
+          </div>
+          <button
+            onClick={toggleAirGappedMode}
+            className="text-xs text-amber-400 hover:text-amber-300 underline font-mono font-semibold"
+          >
+            Switch to Hybrid Cloud
+          </button>
+        </div>
+      )}
+
       {/* Top Telemetry KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* 1. Throughput */}
@@ -50,7 +77,7 @@ export const LiveTelemetryHUD: React.FC = () => {
           </div>
           <div>
             <div className="flex items-baseline space-x-1.5">
-              <span className="text-2xl font-extrabold text-white font-mono">{currentTokensPerSec.toFixed(1)}</span>
+              <span className="text-2xl font-extrabold text-white font-mono">{displayTokensPerSec.toFixed(1)}</span>
               <span className="text-xs text-cyan-400 font-mono">tokens/s</span>
             </div>
             <div className="flex items-center space-x-1 text-[11px] text-emerald-400 mt-1">
@@ -89,7 +116,7 @@ export const LiveTelemetryHUD: React.FC = () => {
           </div>
           <div>
             <div className="flex items-baseline space-x-1.5">
-              <span className="text-2xl font-extrabold text-amber-400 font-mono">${currentBurnRatePerHour.toFixed(2)}</span>
+              <span className="text-2xl font-extrabold text-amber-400 font-mono">${displayBurnRate.toFixed(2)}</span>
               <span className="text-xs text-slate-400 font-mono">/ hour</span>
             </div>
             <div className="text-[11px] text-slate-500 mt-1">
@@ -114,9 +141,9 @@ export const LiveTelemetryHUD: React.FC = () => {
             <div className="flex items-baseline justify-between">
               <div className="flex items-baseline space-x-1 font-mono">
                 <span className={`text-2xl font-extrabold ${budget.isCircuitBreakerTripped ? 'text-rose-400' : 'text-white'}`}>
-                  ${budget.currentDailySpend.toFixed(2)}
+                  ${displayDailySpend.toFixed(2)}
                 </span>
-                <span className="text-xs text-slate-500">/ ${budget.dailyLimit.toFixed(2)}</span>
+                <span className="text-xs text-slate-500">/ {displayDailyLimit !== null ? `$${displayDailyLimit.toFixed(2)}` : '∞'}</span>
               </div>
               <span className="text-xs font-mono font-semibold text-slate-400">{budgetPercentage.toFixed(0)}%</span>
             </div>
