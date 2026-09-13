@@ -4366,7 +4366,7 @@ fn gateway_environment_content(
     #[cfg(target_os = "windows")]
     let content = match client {
         "anthropic" => format!(
-            "$env:CLAUDE_CODE_USE_BEDROCK = \"0\"\n$env:CLAUDE_CODE_USE_VERTEX = \"0\"\nRemove-Item Env:ANTHROPIC_BEDROCK_BASE_URL,Env:ANTHROPIC_VERTEX_BASE_URL -ErrorAction SilentlyContinue\n$env:ANTHROPIC_BASE_URL = \"http://127.0.0.1:{}\"\n$env:ANTHROPIC_AUTH_TOKEN = \"{}\"\n$env:ANTHROPIC_API_KEY = \"{}\"",
+            "$global:TetherMeshClaudeExecutable = (Get-Command claude -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source\n$global:TetherMeshClaudeSettings = '{{\"env\":{{\"CLAUDE_CODE_USE_BEDROCK\":\"0\",\"CLAUDE_CODE_USE_VERTEX\":\"0\",\"ANTHROPIC_BEDROCK_BASE_URL\":\"\",\"ANTHROPIC_VERTEX_BASE_URL\":\"\",\"ANTHROPIC_BASE_URL\":\"http://127.0.0.1:{}\",\"ANTHROPIC_AUTH_TOKEN\":\"{}\",\"ANTHROPIC_API_KEY\":\"{}\"}}}}'\nfunction global:claude {{ & $global:TetherMeshClaudeExecutable --settings $global:TetherMeshClaudeSettings @args }}\nWrite-Host \"TetherMesh Claude routing active for this PowerShell session.\"",
             port, gateway_token, gateway_token
         ),
         "openai" => format!(
@@ -4379,7 +4379,7 @@ fn gateway_environment_content(
     #[cfg(not(target_os = "windows"))]
     let content = match client {
         "anthropic" => format!(
-            "export CLAUDE_CODE_USE_BEDROCK=0\nexport CLAUDE_CODE_USE_VERTEX=0\nunset ANTHROPIC_BEDROCK_BASE_URL ANTHROPIC_VERTEX_BASE_URL\nexport ANTHROPIC_BASE_URL=http://127.0.0.1:{}\nexport ANTHROPIC_AUTH_TOKEN={}\nexport ANTHROPIC_API_KEY={}",
+            "export TETHERMESH_CLAUDE_SETTINGS='{{\"env\":{{\"CLAUDE_CODE_USE_BEDROCK\":\"0\",\"CLAUDE_CODE_USE_VERTEX\":\"0\",\"ANTHROPIC_BEDROCK_BASE_URL\":\"\",\"ANTHROPIC_VERTEX_BASE_URL\":\"\",\"ANTHROPIC_BASE_URL\":\"http://127.0.0.1:{}\",\"ANTHROPIC_AUTH_TOKEN\":\"{}\",\"ANTHROPIC_API_KEY\":\"{}\"}}}}'\nclaude() {{ command claude --settings \"$TETHERMESH_CLAUDE_SETTINGS\" \"$@\"; }}\nprintf '%s\\n' 'TetherMesh Claude routing active for this terminal session.'",
             port, gateway_token, gateway_token
         ),
         "openai" => format!(
@@ -5613,12 +5613,12 @@ mod tests {
         #[cfg(target_os = "windows")]
         assert_eq!(
             content,
-            "$env:CLAUDE_CODE_USE_BEDROCK = \"0\"\n$env:CLAUDE_CODE_USE_VERTEX = \"0\"\nRemove-Item Env:ANTHROPIC_BEDROCK_BASE_URL,Env:ANTHROPIC_VERTEX_BASE_URL -ErrorAction SilentlyContinue\n$env:ANTHROPIC_BASE_URL = \"http://127.0.0.1:48123\"\n$env:ANTHROPIC_AUTH_TOKEN = \"test-gateway-token\"\n$env:ANTHROPIC_API_KEY = \"test-gateway-token\""
+            "$global:TetherMeshClaudeExecutable = (Get-Command claude -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source\n$global:TetherMeshClaudeSettings = '{\"env\":{\"CLAUDE_CODE_USE_BEDROCK\":\"0\",\"CLAUDE_CODE_USE_VERTEX\":\"0\",\"ANTHROPIC_BEDROCK_BASE_URL\":\"\",\"ANTHROPIC_VERTEX_BASE_URL\":\"\",\"ANTHROPIC_BASE_URL\":\"http://127.0.0.1:48123\",\"ANTHROPIC_AUTH_TOKEN\":\"test-gateway-token\",\"ANTHROPIC_API_KEY\":\"test-gateway-token\"}}'\nfunction global:claude { & $global:TetherMeshClaudeExecutable --settings $global:TetherMeshClaudeSettings @args }\nWrite-Host \"TetherMesh Claude routing active for this PowerShell session.\""
         );
         #[cfg(not(target_os = "windows"))]
         assert_eq!(
             content,
-            "export CLAUDE_CODE_USE_BEDROCK=0\nexport CLAUDE_CODE_USE_VERTEX=0\nunset ANTHROPIC_BEDROCK_BASE_URL ANTHROPIC_VERTEX_BASE_URL\nexport ANTHROPIC_BASE_URL=http://127.0.0.1:48123\nexport ANTHROPIC_AUTH_TOKEN=test-gateway-token\nexport ANTHROPIC_API_KEY=test-gateway-token"
+            "export TETHERMESH_CLAUDE_SETTINGS='{\"env\":{\"CLAUDE_CODE_USE_BEDROCK\":\"0\",\"CLAUDE_CODE_USE_VERTEX\":\"0\",\"ANTHROPIC_BEDROCK_BASE_URL\":\"\",\"ANTHROPIC_VERTEX_BASE_URL\":\"\",\"ANTHROPIC_BASE_URL\":\"http://127.0.0.1:48123\",\"ANTHROPIC_AUTH_TOKEN\":\"test-gateway-token\",\"ANTHROPIC_API_KEY\":\"test-gateway-token\"}}'\nclaude() { command claude --settings \"$TETHERMESH_CLAUDE_SETTINGS\" \"$@\"; }\nprintf '%s\\n' 'TetherMesh Claude routing active for this terminal session.'"
         );
     }
 
