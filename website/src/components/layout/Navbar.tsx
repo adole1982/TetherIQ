@@ -1,16 +1,5 @@
 import React, { useState } from 'react';
-import {
-  Download,
-  Menu,
-  X,
-  Shield,
-  Layers,
-  BookOpen,
-  Clock,
-  ExternalLink,
-  Sparkles
-} from 'lucide-react';
-import { Github } from '../icons/BrandIcons';
+import { Menu, X, Sparkles } from 'lucide-react';
 
 interface NavbarProps {
   currentRoute: string;
@@ -19,151 +8,22 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ currentRoute, navigate, onOpenDownload }) => {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  const navLinks = [
-    { label: 'Features', route: '/' },
-    { label: 'Security & Privacy', route: '/security', icon: Shield },
-    { label: 'MCP Marketplace', route: '/mcp', icon: Layers, badge: '50+ Planned' },
-    { label: 'Documentation', route: '/docs', icon: BookOpen },
-    { label: 'Changelog', route: '/changelog', icon: Clock, badge: 'Roadmap' },
+  const [open, setOpen] = useState(false);
+  const links = [
+    { label: 'Overview', route: '/' },
+    { label: 'AI access', route: '/mcp' },
+    { label: 'Security', route: '/security' },
+    { label: 'Docs', route: '/docs' },
+    { label: 'Changelog', route: '/changelog' },
   ];
-
-  const handleNav = (route: string) => {
-    navigate(route);
-    setMobileMenuOpen(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  return (
-    <nav className="sticky top-0 z-40 w-full frosted-glass border-b border-slate-200/80 transition-all">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <button 
-            onClick={() => handleNav('/')}
-            className="flex items-center space-x-3 group text-left focus:outline-none"
-          >
-            <img 
-              src="/brand/generated/tethermesh-navbar-lockup.png" 
-              alt="TetherMesh Logo" 
-              className="h-8 sm:h-9 object-contain transition-transform group-hover:scale-[1.02]"
-              onError={(e) => {
-                const target = e.currentTarget as HTMLImageElement;
-                target.style.display = 'none';
-              }}
-            />
-          </button>
-
-          {/* Desktop Nav Links */}
-          <div className="hidden md:flex items-center space-x-1 lg:space-x-2">
-            {navLinks.map((link) => {
-              const isActive = currentRoute === link.route;
-              return (
-                <button
-                  key={link.route}
-                  onClick={() => handleNav(link.route)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${
-                    isActive 
-                      ? 'text-cyan-700 bg-cyan-50 font-semibold shadow-xs' 
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
-                  }`}
-                >
-                  <span>{link.label}</span>
-                  {link.badge && (
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                      isActive ? 'bg-cyan-200/70 text-cyan-800' : 'bg-slate-200/80 text-slate-700'
-                    }`}>
-                      {link.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Right Action Center */}
-          <div className="hidden md:flex items-center space-x-3">
-            {/* GitHub Link */}
-            <a
-              href="https://github.com/adole1982/TetherIQ"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 transition-all shadow-xs"
-            >
-              <Github className="w-3.5 h-3.5" />
-              <span>View on GitHub</span>
-            </a>
-
-            {/* Primary Waitlist CTA */}
-            <button
-              onClick={onOpenDownload}
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold text-xs tracking-wide shadow-sm hover:shadow transition-all flex items-center space-x-1.5"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Coming Oct 2026</span>
-            </button>
-          </div>
-
-          {/* Mobile Hamburger Toggle */}
-          <div className="flex md:hidden items-center space-x-2">
-            <button
-              onClick={onOpenDownload}
-              className="px-3 py-1.5 rounded-lg bg-slate-900 text-white font-medium text-xs flex items-center space-x-1"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Waitlist</span>
-            </button>
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Drawer */}
-      {mobileMenuOpen && (
-        <div className="md:hidden border-b border-slate-200 bg-white/95 backdrop-blur-xl px-4 pt-2 pb-4 space-y-1">
-          {navLinks.map((link) => (
-            <button
-              key={link.route}
-              onClick={() => handleNav(link.route)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium ${
-                currentRoute === link.route 
-                  ? 'bg-cyan-50 text-cyan-700 font-semibold' 
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                {link.icon && <link.icon className="w-4 h-4 text-slate-500" />}
-                {link.label}
-              </span>
-              {link.badge && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
-                  {link.badge}
-                </span>
-              )}
-            </button>
-          ))}
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-            <a
-              href="https://github.com/adole1982/TetherIQ"
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs text-slate-600 font-medium flex items-center gap-1.5"
-            >
-              <Github className="w-4 h-4" />
-              <span>GitHub Repository</span>
-            </a>
-            <span className="text-xs font-mono text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-              ● 127.0.0.1:4000
-            </span>
-          </div>
-        </div>
-      )}
-    </nav>
-  );
+  const go = (route: string) => { navigate(route); setOpen(false); };
+  return <nav className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
+    <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <button onClick={() => go('/')} className="flex items-center" aria-label="Tethermesh home"><img src="/brand/generated/tethermesh-navbar-lockup.png" alt="Tethermesh" className="h-8 w-auto" /></button>
+      <div className="hidden items-center gap-1 md:flex">{links.map(link => <button key={link.route} onClick={() => go(link.route)} className={`rounded-lg px-3 py-2 text-sm font-medium transition ${currentRoute === link.route ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'}`}>{link.label}</button>)}</div>
+      <div className="hidden md:block"><button onClick={onOpenDownload} className="button-primary !px-4 !py-2 text-xs"><Sparkles className="h-3.5 w-3.5" />Request early access</button></div>
+      <div className="flex items-center gap-2 md:hidden"><button onClick={onOpenDownload} className="button-primary !px-3 !py-2 text-xs">Early access</button><button onClick={() => setOpen(!open)} className="rounded-lg p-2 text-slate-600" aria-label="Toggle navigation">{open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button></div>
+    </div>
+    {open && <div className="border-t border-slate-200 bg-white px-4 pb-4 pt-2 md:hidden">{links.map(link => <button key={link.route} onClick={() => go(link.route)} className={`block w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium ${currentRoute === link.route ? 'bg-blue-50 text-blue-700' : 'text-slate-600'}`}>{link.label}</button>)}</div>}
+  </nav>;
 };
