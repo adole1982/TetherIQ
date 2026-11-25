@@ -80,44 +80,12 @@
     padding: 1.5rem;
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
   }
-  .product-placeholder {
+  .product-preview {
     overflow: hidden;
     border: 1px solid #cbd5e1;
     border-radius: 1rem;
-    background: #f8fafc;
+    background: white;
     box-shadow: 0 24px 60px -28px rgba(15, 23, 42, 0.35);
-  }
-  .placeholder-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid #e2e8f0;
-    background: white;
-    padding: 0.75rem 1rem;
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.65rem;
-    color: #64748b;
-  }
-  .map-node {
-    position: absolute;
-    z-index: 1;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    border: 1px solid #bfdbfe;
-    border-radius: 0.6rem;
-    background: white;
-    padding: 0.45rem 0.6rem;
-    font-size: 0.65rem;
-    font-weight: 700;
-    color: #334155;
-    box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
-  }
-  .map-line {
-    position: absolute;
-    height: 1px;
-    transform-origin: left center;
-    background: #93c5fd;
   }
   .bg-grid {
     background-image: linear-gradient(to right, rgba(148, 163, 184, 0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
