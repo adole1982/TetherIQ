@@ -61,9 +61,9 @@ export const HomePage: React.FC<HomePageProps> = ({ navigate, onOpenDownload }) 
         <div className="grid items-center gap-14 lg:grid-cols-[1fr_0.9fr]">
           <div>
             <div className="eyebrow"><span className="status-dot" />Your stack, mapped to your projects</div>
-            <h1 className="mt-6 max-w-3xl text-4xl font-extrabold tracking-tight text-slate-950 sm:text-6xl">
-              Understand your stack. <span className="brand-gradient-text">Map your projects.</span>
-              <span className="block">Give your coding assistant better context.</span>
+            <h1 className="mt-6 max-w-3xl text-4xl font-extrabold tracking-tight text-slate-950 sm:text-5xl">
+              Catalogue your stack. <span className="brand-gradient-text">Document your project architecture.</span>
+              <span className="block">Give your coding assistants better context.</span>
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
               Bring your tools, setups and architecture decisions together, then carry reviewed project context into your coding workflow.
