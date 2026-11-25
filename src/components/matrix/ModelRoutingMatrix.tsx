@@ -10,7 +10,12 @@ import {
   Layers, 
   Zap, 
   AlertCircle,
-  Plus
+  Plus,
+  Shield,
+  RefreshCw,
+  Cpu,
+  Server,
+  Lock
 } from 'lucide-react';
 import { useTetherStore } from '../../store/useTetherStore';
 
@@ -19,16 +24,27 @@ export const ModelRoutingMatrix: React.FC = () => {
     fallbackChains, 
     virtualAliases, 
     providers, 
-    setKeyManagerOpen 
+    setKeyManagerOpen,
+    isAirGappedMode,
+    toggleAirGappedMode,
+    localMeshStatus,
+    scanLocalMesh
   } = useTetherStore();
 
   const [activeChainId, setActiveChainId] = useState<string>(fallbackChains[0]?.id || 'chain-heavy-reasoning');
+  const [isScanning, setIsScanning] = useState(false);
 
   const selectedChain = fallbackChains.find(c => c.id === activeChainId) || fallbackChains[0];
 
+  const handleScan = async () => {
+    setIsScanning(true);
+    await scanLocalMesh();
+    setTimeout(() => setIsScanning(false), 600);
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header with Key Manager Trigger */}
+      {/* Header with Key Manager & Air-Gapped Mode Switch */}
       <div className="p-6 rounded-xl bg-gradient-to-r from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800 flex items-center justify-between">
         <div className="space-y-1 max-w-xl">
           <div className="flex items-center space-x-2">
@@ -41,7 +57,19 @@ export const ModelRoutingMatrix: React.FC = () => {
           </p>
         </div>
 
-        <div className="space-y-2">
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={toggleAirGappedMode}
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg border text-xs font-semibold transition-all ${
+              isAirGappedMode
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-lg shadow-amber-500/10'
+                : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+            }`}
+          >
+            <Lock className="w-4 h-4 text-amber-400" />
+            <span>{isAirGappedMode ? '🛡️ Air-Gapped (Offline)' : 'Cloud + Local'}</span>
+          </button>
+
           <button
             onClick={() => setKeyManagerOpen(true)}
             className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-cyan-500/40 text-xs font-semibold shadow-sm transition-all"
@@ -49,10 +77,99 @@ export const ModelRoutingMatrix: React.FC = () => {
             <Key className="w-4 h-4 text-amber-400" />
             <span>Manage Provider API Keys ({providers.filter(p => p.isEnabled).length})</span>
           </button>
-          <p className="text-[11px] text-amber-300 font-mono">
-            Keys are session-only. To persist, set env vars: <code className="text-cyan-300">AWS_ACCESS_KEY_ID</code>, <code className="text-cyan-300">OPENAI_API_KEY</code>
-          </p>
         </div>
+      </div>
+
+      {/* Air-Gapped Local Mesh Scanner Card */}
+      <div className={`p-5 rounded-xl border transition-all ${
+        isAirGappedMode ? 'bg-amber-950/20 border-amber-500/40' : 'bg-slate-900/80 border-slate-800'
+      } space-y-4`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <Cpu className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-xs font-bold text-white uppercase tracking-wider">
+                  Air-Gapped Local Mesh Auto-Discovery
+                </h2>
+                {isAirGappedMode && (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                    Active: 100% Offline
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Scans Ollama (11434) and LM Studio (1234) for local models. Routes 100% locally with zero cloud telemetry.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleScan}
+            disabled={isScanning}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-all"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isScanning ? 'animate-spin' : ''}`} />
+            <span>{isScanning ? 'Scanning Local Ports...' : 'Scan Local Mesh'}</span>
+          </button>
+        </div>
+
+        {/* Local Discovery Status Grid */}
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <div className="p-3 rounded-lg bg-slate-950 border border-slate-800/80 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Server className="w-4 h-4 text-cyan-400" />
+              <div>
+                <div className="text-xs font-semibold text-white">Ollama Daemon</div>
+                <div className="text-[10px] font-mono text-slate-500">http://localhost:11434</div>
+              </div>
+            </div>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-mono ${
+              localMeshStatus?.ollamaRunning
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                : 'bg-slate-800 text-slate-400'
+            }`}>
+              {localMeshStatus?.ollamaRunning ? 'Running' : 'Offline / Standby'}
+            </span>
+          </div>
+
+          <div className="p-3 rounded-lg bg-slate-950 border border-slate-800/80 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Cpu className="w-4 h-4 text-indigo-400" />
+              <div>
+                <div className="text-xs font-semibold text-white">LM Studio Local Server</div>
+                <div className="text-[10px] font-mono text-slate-500">http://localhost:1234</div>
+              </div>
+            </div>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-mono ${
+              localMeshStatus?.lmStudioRunning
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                : 'bg-slate-800 text-slate-400'
+            }`}>
+              {localMeshStatus?.lmStudioRunning ? 'Running' : 'Offline / Standby'}
+            </span>
+          </div>
+        </div>
+
+        {/* Discovered Models List */}
+        {localMeshStatus?.discoveredModels && localMeshStatus.discoveredModels.length > 0 && (
+          <div className="space-y-1.5 pt-2 border-t border-slate-800/60">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              Discovered Local Models ({localMeshStatus.discoveredModels.length})
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {localMeshStatus.discoveredModels.map((m) => (
+                <div key={m.name} className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center space-x-1.5 text-xs font-mono">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span className="text-cyan-300 font-semibold">{m.name}</span>
+                  <span className="text-[10px] text-slate-500">({m.family})</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Virtual Model Aliasing Card */}

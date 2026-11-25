@@ -34,11 +34,12 @@ export type TelemetryUpdateHandler = (data: {
 }) => void;
 
 class TelemetryStreamService {
-  private eventSource: EventSource | null = null;
   private pollInterval: any = null;
-  private baseUrl = 'http://127.0.0.1:4000';
+  private baseUrl = '';
   private listeners: Set<TelemetryUpdateHandler> = new Set();
   private isConnected = false;
+  private unlistenEvent: (() => void) | null = null;
+  private abortController: AbortController | null = null;
 
   public subscribe(handler: TelemetryUpdateHandler): () => void {
     this.listeners.add(handler);
@@ -62,62 +63,67 @@ class TelemetryStreamService {
 
   public async fetchSnapshot(): Promise<TelemetrySnapshot | null> {
     try {
-      const res = await fetch(`${this.baseUrl}/tether/telemetry`);
-      if (!res.ok) return null;
-      return (await res.json()) as TelemetrySnapshot;
+      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        return (await invoke<TelemetrySnapshot>('get_telemetry_snapshot')) || null;
+      }
+      return null;
     } catch {
       return null;
     }
   }
 
-  private startStream() {
+  private async startStream() {
     if (typeof window === 'undefined') return;
 
-    try {
-      // Connect to SSE stream on port 4000
-      this.eventSource = new EventSource(`${this.baseUrl}/tether/events`);
+    this.stopStream();
 
-      this.eventSource.onopen = () => {
-        this.isConnected = true;
-        this.stopPolling();
-      };
-
-      this.eventSource.onmessage = (e) => {
-        try {
-          const payload = JSON.parse(e.data);
-          if (payload.type === 'init' && payload.snapshot) {
-            const snap = payload.snapshot as TelemetrySnapshot;
+    // 1. In Tauri Desktop mode: listen to native broadcast event with polling fallback
+    if ((window as any).__TAURI__) {
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+        const unlisten = await listen<TelemetrySnapshot>('tether-telemetry-event', (event) => {
+          if (event.payload) {
             this.notifyListeners({
-              traces: snap.traces,
-              agents: snap.agents,
-              stats: snap.stats,
-              history: snap.history,
-            });
-          } else if (payload.type === 'trace') {
-            this.notifyListeners({
-              newTrace: payload.trace,
-              updatedAgent: payload.agent,
-              stats: payload.stats,
-              point: payload.point,
+              traces: event.payload.traces,
+              agents: event.payload.agents,
+              stats: event.payload.stats,
+              history: event.payload.history,
             });
           }
-        } catch (err) {
-          console.error('[TelemetryStream] Failed to parse SSE event:', err);
-        }
-      };
+        });
+        this.unlistenEvent = unlisten;
+      } catch (err) {
+        console.warn('[TelemetryStream] Native event listener init notice:', err);
+      }
 
-      this.eventSource.onerror = () => {
-        this.isConnected = false;
-        if (this.eventSource) {
-          this.eventSource.close();
-          this.eventSource = null;
+      const snap = await this.fetchSnapshot();
+      if (snap) {
+        this.notifyListeners({
+          traces: snap.traces,
+          agents: snap.agents,
+          stats: snap.stats,
+          history: snap.history,
+        });
+      }
+
+      // Set up periodic native polling fallback
+      this.pollInterval = setInterval(async () => {
+        const latest = await this.fetchSnapshot();
+        if (latest) {
+          this.notifyListeners({
+            traces: latest.traces,
+            agents: latest.agents,
+            stats: latest.stats,
+            history: latest.history,
+          });
         }
-        // Fallback to polling if SSE is interrupted
-        this.startPolling();
-      };
-    } catch {
-      this.startPolling();
+      }, 3000);
+      return;
     }
+
+    // 2. Web fallback mode
+    this.startPolling();
   }
 
   private startPolling() {
@@ -143,9 +149,13 @@ class TelemetryStreamService {
   }
 
   private stopStream() {
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
+    if (this.unlistenEvent) {
+      this.unlistenEvent();
+      this.unlistenEvent = null;
+    }
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
     }
     this.stopPolling();
     this.isConnected = false;

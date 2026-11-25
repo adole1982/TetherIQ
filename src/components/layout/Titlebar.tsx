@@ -25,6 +25,8 @@ export const Titlebar: React.FC = () => {
     setKeyManagerOpen,
     resetCircuitBreaker
   } = useTetherStore();
+  const dailySpend = Number.isFinite(Number(budget.currentDailySpend)) ? Number(budget.currentDailySpend) : 0;
+  const dailyLimit = budget.dailyLimit === null ? null : (Number.isFinite(Number(budget.dailyLimit)) ? Number(budget.dailyLimit) : null);
 
   return (
     <header className="h-12 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md px-4 flex items-center justify-between select-none z-30">
@@ -62,7 +64,7 @@ export const Titlebar: React.FC = () => {
         {budget.isCircuitBreakerTripped ? (
           <div className="flex items-center space-x-2 px-2.5 py-1 rounded-md bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs animate-bounce">
             <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-            <span className="font-semibold">Runaway Spend Tripped (${budget.currentDailySpend.toFixed(2)}/${budget.dailyLimit.toFixed(2)})</span>
+            <span className="font-semibold">Runaway Spend Tripped (${dailySpend.toFixed(2)}/{dailyLimit !== null ? `$${dailyLimit.toFixed(2)}` : '∞'})</span>
             <button
               onClick={resetCircuitBreaker}
               className="ml-1 underline text-rose-200 hover:text-white text-[11px]"
@@ -73,8 +75,8 @@ export const Titlebar: React.FC = () => {
         ) : (
           <div className="flex items-center space-x-2 px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-xs">
             <span className="text-slate-400">Daily Cap:</span>
-            <span className="font-mono text-cyan-400 font-medium">${budget.currentDailySpend.toFixed(2)}</span>
-            <span className="text-slate-500">/ ${budget.dailyLimit.toFixed(2)}</span>
+            <span className="font-mono text-cyan-400 font-medium">${dailySpend.toFixed(2)}</span>
+            <span className="text-slate-500">/ {dailyLimit !== null ? `$${dailyLimit.toFixed(2)}` : '∞'}</span>
           </div>
         )}
 

@@ -10,8 +10,8 @@ export interface TelemetryPoint {
 }
 
 export interface SpendBudget {
-  dailyLimit: number;
-  monthlyLimit: number;
+  dailyLimit: number | null;
+  monthlyLimit: number | null;
   currentDailySpend: number;
   currentMonthlySpend: number;
   isCircuitBreakerTripped: boolean;

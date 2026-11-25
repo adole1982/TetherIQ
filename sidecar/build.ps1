@@ -28,10 +28,10 @@ $VenvPython = [System.IO.Path]::Combine($VenvDir, "Scripts", "python.exe")
 $VenvPip = [System.IO.Path]::Combine($VenvDir, "Scripts", "pip.exe")
 $VenvPyInstaller = [System.IO.Path]::Combine($VenvDir, "Scripts", "pyinstaller.exe")
 
-# Step 2: Install dependencies
-Write-Host "[2/5] Installing dependencies..." -ForegroundColor Yellow
-$TrustedArgs = @("--trusted-host", "pypi.org", "--trusted-host", "pypi.python.org", "--trusted-host", "files.pythonhosted.org", "--default-timeout", "120", "--retries", "5")
-& $VenvPython -m pip install $TrustedArgs -r (Join-Path $ScriptDir "requirements.txt")
+# Step 2: Install dependencies (with strict TLS certificate verification)
+Write-Host "[2/5] Installing pinned dependencies with strict TLS verification..." -ForegroundColor Yellow
+& $VenvPython -m pip install --upgrade pip
+& $VenvPython -m pip install -r (Join-Path $ScriptDir "requirements.txt")
 
 # Step 3: Run PyInstaller
 Write-Host "[3/5] Building sidecar with PyInstaller (--onedir)..." -ForegroundColor Yellow
@@ -70,6 +70,14 @@ $ExePath = [System.IO.Path]::Combine($OutputDir, "litellm-proxy.exe")
 if (-not (Test-Path $ExePath)) {
     Write-Error "Build verification failed: litellm-proxy.exe not found in output"
     exit 1
+}
+
+# Copy direct externalBin executable and _internal for Tauri packaging
+$TauriExe = [System.IO.Path]::Combine($BinariesParent, "litellm-proxy-$TauriTarget.exe")
+Copy-Item $ExePath $TauriExe -Force
+$DistInternal = [System.IO.Path]::Combine($OutputDir, "_internal")
+if (Test-Path $DistInternal) {
+    Copy-Item -Recurse $DistInternal (Join-Path $BinariesParent "_internal") -Force
 }
 
 # Step 5: Report
